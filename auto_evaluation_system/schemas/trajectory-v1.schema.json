@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Parval0615/Agent-Runtime-Security-Lab/schemas/trajectory-v1.schema.json",
+  "title": "Agent Trajectory v1",
+  "description": "Standardized agent trajectory. Each step has an explicit step_type.",
+  "type": "object",
+  "required": ["schema_version", "session_id", "experiment_id", "seed", "steps"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "session_id": {
+      "type": "string"
+    },
+    "experiment_id": {
+      "type": "string"
+    },
+    "seed": {
+      "type": "integer"
+    },
+    "framework": {
+      "type": "string",
+      "enum": ["langgraph", "autogen", "direct_api"]
+    },
+    "goal": {
+      "type": "object",
+      "properties": {
+        "text": { "type": "string" },
+        "representation": { "type": "object" }
+      }
+    },
+    "injection_mode": {
+      "type": "string",
+      "enum": ["none", "controlled", "observational"]
+    },
+    "steps": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/TrajectoryStep" }
+    },
+    "snapshots": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/StateSnapshot" }
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "started_at": { "type": "string", "format": "date-time" },
+        "ended_at": { "type": "string", "format": "date-time" },
+        "telemetry_overhead_ms": { "type": "number" }
+      }
+    }
+  },
+  "$defs": {
+    "ToolCallIntent": {
+      "type": "object",
+      "required": ["call_id", "name", "arguments"],
+      "properties": {
+        "call_id": { "type": "string" },
+        "name": { "type": "string" },
+        "arguments": { "type": "object" }
+      }
+    },
+    "LLMInferencePayload": {
+      "type": "object",
+      "required": ["model", "input_messages", "turn_index"],
+      "properties": {
+        "model": { "type": "string" },
+        "input_messages": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "output_content": { "type": ["string", "null"] },
+        "tool_call_intents": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ToolCallIntent" }
+        },
+        "turn_index": { "type": "integer", "minimum": 0 },
+        "latency_ms": { "type": ["number", "null"] }
+      }
+    },
+    "ToolCallPayload": {
+      "type": "object",
+      "required": ["call_id", "name", "arguments", "response", "parent_turn_index", "latency_ms"],
+      "properties": {
+        "call_id": { "type": "string" },
+        "name": { "type": "string" },
+        "arguments": { "type": "object" },
+        "response": {},
+        "parent_turn_index": { "type": "integer", "minimum": 0 },
+        "latency_ms": { "type": "number" }
+      }
+    },
+    "MemoryOpPayload": {
+      "type": "object",
+      "required": ["op", "namespace", "key", "layer"],
+      "properties": {
+        "op": { "type": "string", "enum": ["read", "write", "delete"] },
+        "namespace": { "type": "string" },
+        "key": { "type": "string" },
+        "layer": { "type": "string", "enum": ["short_term", "long_term", "episodic"] }
+      }
+    },
+    "TrajectoryStep": {
+      "type": "object",
+      "required": ["step_index", "step_type", "timestamp"],
+      "properties": {
+        "step_index": { "type": "integer", "minimum": 0 },
+        "step_type": {
+          "type": "string",
+          "enum": ["llm_inference", "tool_call"]
+        },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "memory_ops": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/MemoryOpPayload" }
+        },
+        "state_delta": { "type": "object" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "step_type": { "const": "llm_inference" } },
+            "required": ["step_type"]
+          },
+          "then": {
+            "required": ["llm"],
+            "properties": {
+              "llm": { "$ref": "#/$defs/LLMInferencePayload" }
+            },
+            "not": { "required": ["tool_call"] }
+          }
+        },
+        {
+          "if": {
+            "properties": { "step_type": { "const": "tool_call" } },
+            "required": ["step_type"]
+          },
+          "then": {
+            "required": ["tool_call"],
+            "properties": {
+              "tool_call": { "$ref": "#/$defs/ToolCallPayload" }
+            },
+            "not": { "required": ["llm"] }
+          }
+        }
+      ]
+    },
+    "StateSnapshot": {
+      "type": "object",
+      "required": ["step_index", "state"],
+      "properties": {
+        "step_index": { "type": "integer" },
+        "state": { "type": "object" }
+      }
+    }
+  }
+}

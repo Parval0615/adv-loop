@@ -1,0 +1,23 @@
+interactions:
+- request:
+    headers:
+      X-ARL-Turn:
+      - '0'
+  response:
+    body:
+      string: "{\"choices\": [{\"message\": {\"content\": null, \"tool_calls\": [{\"id\": \"call_weather_001\", \"type\": \"function\", \"function\": {\"name\": \"get_weather\", \"arguments\": \"{\\\"city\\\": \\\"Beijing\\\"}\"}}]}}]}"
+- request:
+    headers:
+      X-ARL-Turn:
+      - '1'
+  response:
+    body:
+      string: "{\"choices\": [{\"message\": {\"content\": null, \"tool_calls\": [{\"id\": \"call_news_001\", \"type\": \"function\", \"function\": {\"name\": \"search_news\", \"arguments\": \"{\\\"topic\\\": \\\"technology\\\"}\"}}]}}]}"
+- request:
+    headers:
+      X-ARL-Turn:
+      - '2'
+  response:
+    body:
+      string: "{\"choices\": [{\"message\": {\"content\": \"Beijing is sunny at 22C. Top tech news: AI agents gain runtime security tooling.\"}}]}"
+version: 1

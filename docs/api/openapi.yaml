@@ -1,0 +1,411 @@
+openapi: 3.1.0
+info:
+  title: Agent Security Product API
+  version: 0.1.0
+  description: Private single-tenant API for agent security evaluation.
+servers:
+  - url: http://localhost:8000
+paths:
+  /v1/agents:
+    post:
+      summary: Register an enterprise agent
+      operationId: registerAgent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentRegistration"
+      responses:
+        "200":
+          description: Registered agent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentRegistration"
+  /v1/agents/{agent_id}/sessions:
+    post:
+      summary: Create an evaluation session
+      operationId: createSession
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: tenant_id
+          in: query
+          required: false
+          schema:
+            type: string
+            default: private_tenant
+      responses:
+        "200":
+          description: Session metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [session_id, tenant_id, agent_id]
+                properties:
+                  session_id:
+                    type: string
+                  tenant_id:
+                    type: string
+                  agent_id:
+                    type: string
+  /v1/evaluations:
+    post:
+      summary: Run an evaluation
+      operationId: createEvaluation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EvaluationRequest"
+      responses:
+        "200":
+          description: Evaluation status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvaluationStatus"
+  /v1/evaluations/{evaluation_id}:
+    get:
+      summary: Get evaluation status
+      operationId: getEvaluation
+      parameters:
+        - name: evaluation_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Evaluation status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvaluationStatus"
+  /v1/reports/{report_id}:
+    get:
+      summary: Get an agent security report
+      operationId: getReport
+      parameters:
+        - name: report_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Agent security report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentSecurityReport"
+  /v1/comparisons:
+    post:
+      summary: Compare two completed reports
+      operationId: compareReports
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [before_report_id, after_report_id]
+              properties:
+                before_report_id:
+                  type: string
+                after_report_id:
+                  type: string
+      responses:
+        "200":
+          description: Retest comparison report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentSecurityComparisonReport"
+  /v1/trajectories:
+    post:
+      summary: Upload an offline trajectory
+      operationId: uploadTrajectory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent_id, trajectory]
+              properties:
+                tenant_id:
+                  type: string
+                  default: private_tenant
+                agent_id:
+                  type: string
+                trajectory:
+                  type: object
+      responses:
+        "200":
+          description: Uploaded trajectory reference
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [trajectory_id, path]
+                properties:
+                  trajectory_id:
+                    type: string
+                  path:
+                    type: string
+components:
+  schemas:
+    ToolSpec:
+      type: object
+      required: [name, risk_level, description]
+      properties:
+        name:
+          type: string
+        risk_level:
+          type: string
+        description:
+          type: string
+    AgentRegistration:
+      type: object
+      required: [agent_id, name]
+      properties:
+        schema_version:
+          type: string
+          const: agent-registration-v0.1
+          default: agent-registration-v0.1
+        tenant_id:
+          type: string
+          default: private_tenant
+        agent_id:
+          type: string
+        name:
+          type: string
+        framework:
+          type: string
+          default: sdk
+        adapter_type:
+          type: string
+          enum: [ecommerce_demo, external_sdk, http_endpoint]
+          default: ecommerce_demo
+        endpoint_url:
+          type: [string, "null"]
+        tool_specs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ToolSpec"
+        data_boundary:
+          type: object
+    EvaluationRequest:
+      type: object
+      required: [agent_id]
+      properties:
+        tenant_id:
+          type: string
+          default: private_tenant
+        agent_id:
+          type: string
+        benchmark:
+          type: string
+          default: ecommerce-security-v0.1
+        mode:
+          type: string
+          enum: [sdk, hosted_api, offline_trace]
+          default: sdk
+        pilot_preset:
+          type: [string, "null"]
+          description: customer_service, shopping_guide, or merchant_operations.
+        attack_intensity:
+          type: string
+          enum: [light, medium, heavy]
+          default: medium
+        scenarios:
+          type: array
+          items:
+            type: string
+        policy:
+          type: object
+          properties:
+            no_real_payment:
+              type: boolean
+            no_external_attack:
+              type: boolean
+            single_tenant:
+              type: boolean
+    EvaluationStatus:
+      type: object
+      required: [evaluation_id, tenant_id, agent_id, status]
+      properties:
+        evaluation_id:
+          type: string
+        tenant_id:
+          type: string
+        agent_id:
+          type: string
+        status:
+          type: string
+          enum: [queued, running, completed, failed]
+        report_id:
+          type: [string, "null"]
+        report_path:
+          type: [string, "null"]
+        error:
+          type: [string, "null"]
+    Finding:
+      type: object
+      required: [finding_id, scenario_id, severity, title, description, business_impact, recommendation]
+      properties:
+        finding_id:
+          type: string
+        scenario_id:
+          type: string
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        title:
+          type: string
+        description:
+          type: string
+        business_impact:
+          type: string
+        recommendation:
+          type: string
+    ScenarioResult:
+      type: object
+      required: [scenario_id, category, severity, expected_decision, actual_decision, clean_decision, passed, business_impact, trajectory_ref]
+      properties:
+        scenario_id:
+          type: string
+        category:
+          type: string
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        expected_decision:
+          type: string
+          enum: [allow, block]
+        actual_decision:
+          type: string
+          enum: [allow, block]
+        clean_decision:
+          type: string
+          enum: [allow, block]
+        passed:
+          type: boolean
+        business_impact:
+          type: string
+        trajectory_ref:
+          type: string
+    ReportArtifacts:
+      type: object
+      required: [trajectory_refs, audit_refs, report_path]
+      properties:
+        trajectory_refs:
+          type: array
+          items:
+            type: string
+        audit_refs:
+          type: array
+          items:
+            type: string
+        report_path:
+          type: string
+        markdown_path:
+          type: [string, "null"]
+        dashboard_path:
+          type: [string, "null"]
+    AgentSecurityReport:
+      type: object
+      required: [schema_version, tenant_id, agent_id, benchmark, overall_score, risk_level, artifacts]
+      properties:
+        schema_version:
+          type: string
+          const: agent-security-report-v0.1
+        tenant_id:
+          type: string
+        agent_id:
+          type: string
+        benchmark:
+          type: string
+        overall_score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        risk_level:
+          type: string
+          enum: [low, medium, high, critical]
+        summary:
+          type: object
+        findings:
+          type: array
+          items:
+            $ref: "#/components/schemas/Finding"
+        scenario_results:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScenarioResult"
+        guard_effectiveness:
+          type: object
+        false_positive_rate:
+          type: number
+        attack_success_rate:
+          type: number
+        business_impact:
+          type: object
+        artifacts:
+          $ref: "#/components/schemas/ReportArtifacts"
+    AgentSecurityComparisonReport:
+      type: object
+      required: [schema_version, comparison_id, tenant_id, agent_id, benchmark, before_score, after_score, score_delta, before_risk_level, after_risk_level, risk_level_change, artifacts]
+      properties:
+        schema_version:
+          type: string
+          const: agent-security-comparison-v0.1
+        comparison_id:
+          type: string
+        tenant_id:
+          type: string
+        agent_id:
+          type: string
+        benchmark:
+          type: string
+        before_score:
+          type: integer
+        after_score:
+          type: integer
+        score_delta:
+          type: integer
+        before_risk_level:
+          type: string
+          enum: [low, medium, high, critical]
+        after_risk_level:
+          type: string
+          enum: [low, medium, high, critical]
+        risk_level_change:
+          type: string
+        resolved_findings:
+          type: array
+          items:
+            type: object
+        new_findings:
+          type: array
+          items:
+            type: object
+        persisted_findings:
+          type: array
+          items:
+            type: object
+        scenario_deltas:
+          type: array
+          items:
+            type: object
+        summary:
+          type: object
+        artifacts:
+          type: object

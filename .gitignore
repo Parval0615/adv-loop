@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+
+# ML / Data
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+data/
+datasets/raw/
+checkpoints/
+wandb/
+mlruns/
+
+# Experiment outputs (reproducible from configs + seed)
+outputs/
+results/
+runs/
+attack-runs/
+defense-runs/
+evidence-runs/
+storage/
+logs/
+
+# Local nested clone used during manual merge
+Agent-Runtime-Security-Lab/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Logs & caches
+*.log
+.cache/
+.pytest_cache/
+.ruff_cache/

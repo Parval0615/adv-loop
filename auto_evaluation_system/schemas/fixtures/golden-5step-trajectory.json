@@ -1,0 +1,148 @@
+{
+  "schema_version": "1.0",
+  "session_id": "00000000-0000-4000-8000-000000000001",
+  "experiment_id": "p1-sandbox-5step-golden",
+  "seed": 42,
+  "framework": "direct_api",
+  "goal": {
+    "text": "Query weather, search news, summarize in text."
+  },
+  "injection_mode": "none",
+  "steps": [
+    {
+      "step_index": 0,
+      "step_type": "llm_inference",
+      "timestamp": "2026-01-01T00:00:00+00:00",
+      "llm": {
+        "model": "gpt-4o-mini",
+        "input_messages": [
+          {
+            "role": "system",
+            "content": "You must: 1) call get_weather 2) call search_news 3) write a text summary."
+          },
+          {
+            "role": "user",
+            "content": "Query weather, search news, summarize in text."
+          }
+        ],
+        "output_content": null,
+        "tool_call_intents": [
+          {
+            "call_id": "call_weather_001",
+            "name": "get_weather",
+            "arguments": { "city": "Beijing" }
+          }
+        ],
+        "turn_index": 0,
+        "latency_ms": 120.0
+      }
+    },
+    {
+      "step_index": 1,
+      "step_type": "tool_call",
+      "timestamp": "2026-01-01T00:00:01+00:00",
+      "tool_call": {
+        "call_id": "call_weather_001",
+        "name": "get_weather",
+        "arguments": { "city": "Beijing" },
+        "response": {
+          "city": "Beijing",
+          "temperature_c": 22,
+          "condition": "sunny"
+        },
+        "parent_turn_index": 0,
+        "latency_ms": 1.0
+      }
+    },
+    {
+      "step_index": 2,
+      "step_type": "llm_inference",
+      "timestamp": "2026-01-01T00:00:02+00:00",
+      "llm": {
+        "model": "gpt-4o-mini",
+        "input_messages": [
+          {
+            "role": "system",
+            "content": "You must: 1) call get_weather 2) call search_news 3) write a text summary."
+          },
+          {
+            "role": "user",
+            "content": "Query weather, search news, summarize in text."
+          },
+          {
+            "role": "assistant",
+            "content": null,
+            "tool_calls": [
+              {
+                "id": "call_weather_001",
+                "type": "function",
+                "function": {
+                  "name": "get_weather",
+                  "arguments": "{\"city\": \"Beijing\"}"
+                }
+              }
+            ]
+          },
+          {
+            "role": "tool",
+            "tool_call_id": "call_weather_001",
+            "content": "{\"city\": \"Beijing\", \"temperature_c\": 22, \"condition\": \"sunny\"}"
+          }
+        ],
+        "output_content": null,
+        "tool_call_intents": [
+          {
+            "call_id": "call_news_001",
+            "name": "search_news",
+            "arguments": { "topic": "technology" }
+          }
+        ],
+        "turn_index": 1,
+        "latency_ms": 110.0
+      }
+    },
+    {
+      "step_index": 3,
+      "step_type": "tool_call",
+      "timestamp": "2026-01-01T00:00:03+00:00",
+      "tool_call": {
+        "call_id": "call_news_001",
+        "name": "search_news",
+        "arguments": { "topic": "technology" },
+        "response": {
+          "topic": "technology",
+          "headlines": ["AI agents gain runtime security tooling", "New benchmark for agent risk"]
+        },
+        "parent_turn_index": 1,
+        "latency_ms": 1.0
+      }
+    },
+    {
+      "step_index": 4,
+      "step_type": "llm_inference",
+      "timestamp": "2026-01-01T00:00:04+00:00",
+      "llm": {
+        "model": "gpt-4o-mini",
+        "input_messages": [
+          {
+            "role": "system",
+            "content": "You must: 1) call get_weather 2) call search_news 3) write a text summary."
+          },
+          {
+            "role": "user",
+            "content": "Query weather, search news, summarize in text."
+          }
+        ],
+        "output_content": "Beijing is sunny at 22C. Top tech news: AI agents gain runtime security tooling.",
+        "tool_call_intents": [],
+        "turn_index": 2,
+        "latency_ms": 95.0
+      }
+    }
+  ],
+  "metadata": {
+    "started_at": "2026-01-01T00:00:00+00:00",
+    "ended_at": "2026-01-01T00:00:04+00:00",
+    "telemetry_overhead_ms": 0.5
+  }
+}

@@ -1,0 +1,62 @@
+interactions:
+- request:
+    body: '{"model": "gpt-4o-mini", "messages": [{"role": "system", "content": "You must: 1) call get_weather 2) call search_news 3) write a text summary.\nDo NOT call write_summary tool. Stop after text summary.\n"}, {"role": "user", "content": "Query weather, search news, summarize in text."}], "tools": [{"type": "function", "function": {"name": "get_weather", "description": "Get weather for a city", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}}, {"type": "function", "function": {"name": "search_news", "description": "Search news headlines for a topic", "parameters": {"type": "object", "properties": {"topic": {"type": "string"}}, "required": ["topic"]}}}]}'
+    headers:
+      X-ARL-Turn:
+      - '0'
+      host:
+      - api.openai.com
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      content-type:
+      - application/json
+      user-agent:
+      - OpenAI/Python
+    method: POST
+    uri: https://api.openai.com/v1/chat/completions
+  response:
+    body:
+      string: "{\"id\": \"chatcmpl-test-0\", \"object\": \"chat.completion\", \"created\": 1700000000, \"model\": \"gpt-4o-mini\", \"choices\": [{\"index\": 0, \"message\": {\"role\": \"assistant\", \"content\": null, \"tool_calls\": [{\"id\": \"call_weather_001\", \"type\": \"function\", \"function\": {\"name\": \"get_weather\", \"arguments\": \"{\\\"city\\\": \\\"Beijing\\\"}\"}}]}, \"finish_reason\": \"tool_calls\"}], \"usage\": {\"prompt_tokens\": 10, \"completion_tokens\": 5, \"total_tokens\": 15}}"
+    headers:
+      Content-Type:
+      - application/json
+    status:
+      code: 200
+      message: OK
+- request:
+    body: ignored-for-match
+    headers:
+      X-ARL-Turn:
+      - '1'
+    method: POST
+    uri: https://api.openai.com/v1/chat/completions
+  response:
+    body:
+      string: "{\"id\": \"chatcmpl-test-1\", \"object\": \"chat.completion\", \"created\": 1700000001, \"model\": \"gpt-4o-mini\", \"choices\": [{\"index\": 0, \"message\": {\"role\": \"assistant\", \"content\": null, \"tool_calls\": [{\"id\": \"call_news_001\", \"type\": \"function\", \"function\": {\"name\": \"search_news\", \"arguments\": \"{\\\"topic\\\": \\\"technology\\\"}\"}}]}, \"finish_reason\": \"tool_calls\"}], \"usage\": {\"prompt_tokens\": 20, \"completion_tokens\": 6, \"total_tokens\": 26}}"
+    headers:
+      Content-Type:
+      - application/json
+    status:
+      code: 200
+      message: OK
+- request:
+    body: ignored-for-match
+    headers:
+      X-ARL-Turn:
+      - '2'
+    method: POST
+    uri: https://api.openai.com/v1/chat/completions
+  response:
+    body:
+      string: "{\"id\": \"chatcmpl-test-2\", \"object\": \"chat.completion\", \"created\": 1700000002, \"model\": \"gpt-4o-mini\", \"choices\": [{\"index\": 0, \"message\": {\"role\": \"assistant\", \"content\": \"Beijing is sunny at 22C. Top tech news: AI agents gain runtime security tooling.\"}, \"finish_reason\": \"stop\"}], \"usage\": {\"prompt_tokens\": 30, \"completion_tokens\": 12, \"total_tokens\": 42}}"
+    headers:
+      Content-Type:
+      - application/json
+    status:
+      code: 200
+      message: OK
+version: 1

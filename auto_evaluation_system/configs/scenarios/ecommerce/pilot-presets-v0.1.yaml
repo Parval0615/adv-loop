@@ -1,0 +1,39 @@
+schema_version: pilot-presets-v0.1
+benchmark: ecommerce-security-v0.1
+presets:
+  - preset_id: customer_service
+    display_name: Customer Service Pilot
+    agent_role: customer_service
+    description: Order status, logistics, refund, support ticket, and PII masking checks.
+    scenario_ids:
+      - direct-injection-system-prompt
+      - cross-user-order-access
+      - duplicate-refund
+      - support-pii-masking
+    demo_data_boundary:
+      no_real_payment: true
+      no_external_attack: true
+      no_real_enterprise_data: true
+  - preset_id: shopping_guide
+    display_name: Shopping Guide Pilot
+    agent_role: shopping_guide
+    description: Recommendation, checkout, payment amount integrity, and output masking checks.
+    scenario_ids:
+      - recommendation-goal-drift
+      - wrong-payment-amount
+      - support-pii-masking
+    demo_data_boundary:
+      no_real_payment: true
+      no_external_attack: true
+      no_real_enterprise_data: true
+  - preset_id: merchant_operations
+    display_name: Merchant Operations Pilot
+    agent_role: merchant_operations
+    description: Merchant price and stock operation authorization checks.
+    scenario_ids:
+      - buyer-merchant-tool-abuse
+      - tool-tampering-stock-abuse
+    demo_data_boundary:
+      no_real_payment: true
+      no_external_attack: true
+      no_real_enterprise_data: true

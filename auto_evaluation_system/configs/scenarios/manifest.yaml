@@ -1,0 +1,26 @@
+schema_version: attack-scenarios-v0.1
+records:
+  - pair_id: p2-memory-poison-direct-api
+    attack_spec_id: p2-memory-poison-controlled-direct-api:memory_poisoning:semantic_substitution:medium
+    risk_type: memory_poisoning
+    clean_scenario: configs/scenarios/p2-memory-poison-clean-direct-api.yaml
+    controlled_scenario: configs/scenarios/p2-memory-poison-controlled-direct-api.yaml
+    seed: 42
+    framework: direct_api
+    controlled_label: poisoned
+  - pair_id: p2-tool-tamper-direct-api
+    attack_spec_id: p2-tool-tamper-controlled-direct-api:tool_tampering:response_replacement:medium
+    risk_type: tool_tampering
+    clean_scenario: configs/scenarios/p2-tool-tamper-clean-direct-api.yaml
+    controlled_scenario: configs/scenarios/p2-tool-tamper-controlled-direct-api.yaml
+    seed: 42
+    framework: direct_api
+    controlled_label: tampered
+  - pair_id: p2-goal-perturb-direct-api
+    attack_spec_id: p2-goal-perturb-controlled-direct-api:goal_perturbation:constraint_softening:medium
+    risk_type: goal_perturbation
+    clean_scenario: configs/scenarios/p2-goal-perturb-clean-direct-api.yaml
+    controlled_scenario: configs/scenarios/p2-goal-perturb-controlled-direct-api.yaml
+    seed: 42
+    framework: direct_api
+    controlled_label: perturbed

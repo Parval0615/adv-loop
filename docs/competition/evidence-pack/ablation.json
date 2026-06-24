@@ -1,0 +1,27 @@
+{
+  "groups": [
+    {
+      "coverage": 7,
+      "final_asr": 0.0,
+      "name": "full_system",
+      "name_cn": "完整系统(攻击进化+防御加固)",
+      "note": "ASR 收敛到低位,加固覆盖被攻破类别。"
+    },
+    {
+      "coverage": 7,
+      "final_asr": 0.4375,
+      "name": "no_defense",
+      "name_cn": "去掉 Defense Agent",
+      "note": "无加固,ASR 始终高位 → 证明防御不可或缺。"
+    },
+    {
+      "coverage": 2,
+      "final_asr": 0.0625,
+      "name": "no_attack_reflection",
+      "name_cn": "去掉 Attack reflection",
+      "note": "攻击不进化,攻击面覆盖停滞 → 证明反思不可或缺。"
+    }
+  ],
+  "schema_version": "comp4-ablation-v0.1",
+  "total_categories": 7
+}
