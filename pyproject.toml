@@ -53,6 +53,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = [
+  ".",
   "auto_attack_system/src",
   "auto_defense_system/src",
   "auto_evaluation_system/src",
@@ -85,11 +86,15 @@ ignore = [
 
 [tool.pytest.ini_options]
 testpaths = [
+  "arena/tests",
+  "evasion_shield/tests",
+  "sentinel_proxy/tests",
   "auto_attack_system/tests",
   "auto_defense_system/tests",
   "auto_evaluation_system/tests",
 ]
 pythonpath = [
+  ".",
   "auto_attack_system/src",
   "auto_defense_system/src",
   "auto_evaluation_system/src",

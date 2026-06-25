@@ -71,6 +71,14 @@ python run.py --defense-regression --offline
 python run.py --evidence-pack --offline
 ```
 
+## TP-00 靶场入口
+
+```powershell
+python -m arena.dev_agent.cli --scenario clean-readme --offline --out runs/arena-base
+```
+
+研发助手靶场说明见 [`arena/README.md`](./arena/README.md)。
+
 固定证据副本见 [`docs/competition/evidence-pack`](./docs/competition/evidence-pack/README.md)。
 
 ## 边界
