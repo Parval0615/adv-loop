@@ -48,6 +48,7 @@ class DevToolbox:
             result=event_result,
             decision=event_result["sentinel_decision"],
             executed=intercept.executed,
+            intercept_id=intercept.intercept_id,
         )
         event_result["sentinel_context"] = self.interceptor.context.snapshot()
         tool_event = self.recorder.add(
@@ -59,11 +60,14 @@ class DevToolbox:
         )
         if intercept.executed and isinstance(response, dict) and "content" in response:
             resource_result = {"content": response["content"]}
-            self.interceptor.context.record_resource_read(
+            resource_metadata = self.interceptor.context.record_resource_read(
                 source="file_mcp",
                 arguments={"path": response["path"]},
                 result=resource_result,
+                source_event_id=tool_event.event_id,
+                intercept_id=intercept.intercept_id,
             )
+            resource_result["resource_metadata"] = resource_metadata
             resource_result["sentinel_context"] = self.interceptor.context.snapshot()
             self.recorder.add(
                 event_type="resource_read",
@@ -92,6 +96,7 @@ class DevToolbox:
             result=event_result,
             decision=event_result["sentinel_decision"],
             executed=intercept.executed,
+            intercept_id=intercept.intercept_id,
         )
         event_result["sentinel_context"] = self.interceptor.context.snapshot()
         self.recorder.add(
@@ -122,6 +127,7 @@ class DevToolbox:
             result=event_result,
             decision=event_result["sentinel_decision"],
             executed=intercept.executed,
+            intercept_id=intercept.intercept_id,
         )
         event_result["sentinel_context"] = self.interceptor.context.snapshot()
         tool_event = self.recorder.add(
@@ -133,11 +139,14 @@ class DevToolbox:
         )
         if intercept.executed and method.upper() == "GET" and isinstance(response, dict):
             resource_result = {"status": response["status"], "body": response.get("body")}
-            self.interceptor.context.record_resource_read(
+            resource_metadata = self.interceptor.context.record_resource_read(
                 source="network_mcp",
                 arguments={"url": url},
                 result=resource_result,
+                source_event_id=tool_event.event_id,
+                intercept_id=intercept.intercept_id,
             )
+            resource_result["resource_metadata"] = resource_metadata
             resource_result["sentinel_context"] = self.interceptor.context.snapshot()
             self.recorder.add(
                 event_type="resource_read",
@@ -168,6 +177,7 @@ class DevToolbox:
             result=event_result,
             decision=event_result["sentinel_decision"],
             executed=intercept.executed,
+            intercept_id=intercept.intercept_id,
         )
         event_result["sentinel_context"] = self.interceptor.context.snapshot()
         self.recorder.add(
@@ -196,6 +206,7 @@ class DevToolbox:
             result=event_result,
             decision=event_result["sentinel_decision"],
             executed=intercept.executed,
+            intercept_id=intercept.intercept_id,
         )
         event_result["sentinel_context"] = self.interceptor.context.snapshot()
         self.recorder.add(
@@ -227,6 +238,7 @@ class DevToolbox:
             result=event_result,
             decision=event_result["sentinel_decision"],
             executed=intercept.executed,
+            intercept_id=intercept.intercept_id,
         )
         event_result["sentinel_context"] = self.interceptor.context.snapshot()
         tool_event = self.recorder.add(
@@ -238,7 +250,13 @@ class DevToolbox:
         )
         if intercept.executed:
             dispatch_result = dict(response)
-            self.interceptor.context.record_sub_dispatch(task=task, payload=safe_payload, result=dispatch_result)
+            self.interceptor.context.record_sub_dispatch(
+                task=task,
+                payload=safe_payload,
+                result=dispatch_result,
+                source_event_id=tool_event.event_id,
+                intercept_id=intercept.intercept_id,
+            )
             dispatch_result["sentinel_context"] = self.interceptor.context.snapshot()
             self.recorder.add(
                 event_type="sub_dispatch",
@@ -306,5 +324,7 @@ class DevToolbox:
         result["sentinel_decision"] = self.interceptor.decision_summary(
             intercept.decision,
             executed=intercept.executed,
+            intercept_id=intercept.intercept_id,
         )
+        result["sentinel_intercept_id"] = intercept.intercept_id
         return result

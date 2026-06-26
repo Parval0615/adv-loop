@@ -60,6 +60,10 @@ where = [
   "sdk/python/src",
 ]
 
+[tool.setuptools.package-data]
+"arena.cases" = ["manifest.json"]
+"policy_dsl" = ["default_rules.json"]
+
 [tool.ruff]
 line-length = 120
 target-version = "py310"
@@ -88,7 +92,12 @@ ignore = [
 testpaths = [
   "arena/tests",
   "evasion_shield/tests",
+  "injection_radar/tests",
+  "intent_aligner/tests",
+  "policy_dsl/tests",
   "sentinel_proxy/tests",
+  "sentinel_console/tests",
+  "trace_dag/tests",
   "auto_attack_system/tests",
   "auto_defense_system/tests",
   "auto_evaluation_system/tests",

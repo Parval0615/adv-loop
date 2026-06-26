@@ -1,16 +1,38 @@
-# Sentinel Proxy Skeleton
+# Sentinel Proxy
 
-`sentinel_proxy` 是 TP-01 的 MCP-Sentinel 代理骨架。它为 TP-00 研发助手靶场提供统一的拦截入口、上下文聚合和可插拔三态裁决流水线。
-
-当前默认 stage 都返回 `allow`，其中 `normalizer` 会先写入归一化记录：
+`sentinel_proxy` is the MCP-Sentinel interception layer used by the local arena.
+It wraps every TP-00 development-agent tool call and sends it through one
+pipeline:
 
 ```text
-normalizer -> radar -> aligner -> policy -> trace
+normalizer -> injection_radar -> intent_aligner -> policy_dsl -> trace_dag
 ```
 
-代理模式：
+Modes:
 
-- `observe`：记录真实裁决，但继续透传执行。
-- `enforce`：只执行 `allow`；`block` 和 `ask` 不执行真实工具。
+- `observe`: record the selected decision and still execute the tool.
+- `enforce`: execute only `allow`; return `blocked` or `requires_confirmation`
+  for `block` and `ask`.
 
-本包不实现真实注入识别、意图对齐、策略 DSL 或 DAG 溯源；这些能力由后续任务包补齐。
+Artifacts written by arena runs include:
+
+- `events.jsonl`
+- `sentinel_decisions.jsonl`
+- `trace_graph.json`
+- `trace_report.json`
+- `trace_timeline.jsonl`
+- `trace_graph.md`
+- `trace_integrity.json`
+
+The implementation remains local and deterministic. It does not connect to real
+MCP servers, real private keys, real external endpoints, or real remote git
+repositories.
+
+Current limits:
+
+- Detection is deterministic and fixture-oriented; it is not a live LLM security
+  classifier.
+- `policy_dsl` loads declarative default rules from `default_rules.json`, but it
+  is still a minimal arena policy language, not a general-purpose policy system.
+- `trace_dag` produces local evidence artifacts for review; it is not a
+  production audit backend.

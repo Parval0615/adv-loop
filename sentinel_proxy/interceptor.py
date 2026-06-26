@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from copy import deepcopy
+from dataclasses import replace
 from typing import Any
 
 from sentinel_proxy.context import SentinelContext
@@ -23,8 +24,12 @@ class SentinelInterceptor:
         self.mode = mode
         self.pipeline = pipeline or SentinelPipeline()
         self.decision_records: list[dict[str, Any]] = []
+        self._intercept_counter = 0
 
     def intercept(self, request: InterceptRequest, execute: Callable[[], Any]) -> InterceptResult:
+        if request.intercept_id is None:
+            self._intercept_counter += 1
+            request = replace(request, intercept_id=f"int-{self._intercept_counter:04d}")
         context_before = self.context.snapshot()
         decision = self.pipeline.evaluate(request, self.context)
         context_after = self.context.snapshot()
@@ -37,12 +42,24 @@ class SentinelInterceptor:
         else:
             response = {"blocked": True, "reason": decision.reason}
 
-        result = InterceptResult(executed=executed, decision=decision, response=response)
+        result = InterceptResult(
+            intercept_id=request.intercept_id or "",
+            executed=executed,
+            decision=decision,
+            response=response,
+        )
         self._record_decision(request, context_before, context_after, result)
         return result
 
-    def decision_summary(self, decision: InterceptDecision, *, executed: bool) -> dict[str, Any]:
+    def decision_summary(
+        self,
+        decision: InterceptDecision,
+        *,
+        executed: bool,
+        intercept_id: str | None = None,
+    ) -> dict[str, Any]:
         return {
+            "intercept_id": intercept_id,
             "decision": decision.decision,
             "stage": decision.stage,
             "reason": decision.reason,
@@ -59,6 +76,8 @@ class SentinelInterceptor:
     ) -> None:
         self.decision_records.append(
             {
+                "intercept_id": result.intercept_id,
+                "trace_id": self.context.trace_id,
                 "mode": self.mode,
                 "request": request.to_dict(),
                 "context": deepcopy(context_after),

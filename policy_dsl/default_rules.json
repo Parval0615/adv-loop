@@ -1,0 +1,52 @@
+[
+  {
+    "rule_id": "fs-write-sensitive-location",
+    "tool": "fs.write",
+    "decision": "block",
+    "risk_level": "high",
+    "reason": "Writing to credential, SSH, cron, or autostart locations is not allowed.",
+    "conditions": [
+      {"type": "path_matches_sensitive", "field": "path"}
+    ]
+  },
+  {
+    "rule_id": "net-exfil-sensitive-data",
+    "tool": "net.fetch",
+    "decision": "block",
+    "risk_level": "critical",
+    "reason": "Sensitive local data read during this session must not be sent to an untrusted network endpoint.",
+    "conditions": [
+      {"type": "body_contains_sensitive_resource_to_untrusted_domain", "url_field": "url", "body_field": "body"}
+    ]
+  },
+  {
+    "rule_id": "exec-dangerous-decoding-or-download",
+    "tool": "exec",
+    "decision": "block",
+    "risk_level": "high",
+    "reason": "Decode-and-execute or remote-download pipe execution commands are blocked.",
+    "conditions": [
+      {"type": "command_dangerous", "field": "command"}
+    ]
+  },
+  {
+    "rule_id": "git-push-during-code-review",
+    "tool": "git.push",
+    "decision": "ask",
+    "risk_level": "medium",
+    "reason": "Pushing code during a code-review task requires confirmation.",
+    "conditions": [
+      {"type": "task_contains_code_review"}
+    ]
+  },
+  {
+    "rule_id": "sub-agent-secret-dispatch",
+    "tool": "sub_agent.dispatch",
+    "decision": "block",
+    "risk_level": "high",
+    "reason": "Sensitive local data read during this session must not be passed to a sub-agent.",
+    "conditions": [
+      {"type": "payload_contains_sensitive_resource", "field": "payload"}
+    ]
+  }
+]

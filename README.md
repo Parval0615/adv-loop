@@ -81,9 +81,17 @@ python -m arena.dev_agent.cli --scenario clean-readme --offline --out runs/arena
 
 固定证据副本见 [`docs/competition/evidence-pack`](./docs/competition/evidence-pack/README.md)。
 
+## 当前实现状态
+
+| 范围 | 状态 |
+|---|---|
+| TP-00 ~ TP-02 | 已完成本地靶场、代理骨架和归一化前置层。 |
+| TP-03 ~ TP-09 | 已落地 deterministic local v1：多源注入识别、意图偏离、策略 DSL、trace DAG、评测集和静态复盘控制台。 |
+| 生产网关能力 | 未完成；当前实现不接真实 MCP server、真实私钥、真实外网或真实远端仓库。 |
+
 ## 边界
 
-- 当前 `ROADMAP.md` 描述的是赛事二 MCP-Sentinel 的目标形态，其中 TP-00 到 TP-09 会逐步落地。
-- 当前可运行代码仍以 AdvLoop 赛事一离线基线为主。
+- 当前 `ROADMAP.md` 描述的是赛事二 MCP-Sentinel 的目标形态；本仓库已提供本地 deterministic v1，但仍不是生产级 MCP 网关。
+- `arena.eval` 和 `sentinel_console` 面向本地 fixture 复现与复盘，评测指标不代表真实线上流量表现。
 - 本仓库不接真实淘宝、真实支付、真实企业数据或真实外部攻击目标。
 - `docs/product/` 中的 enterprise pilot 指本地私有单租户试点包，不代表 SaaS、多租户或生产集成已完成。

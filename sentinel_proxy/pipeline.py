@@ -4,8 +4,12 @@ from collections.abc import Callable
 from typing import Any
 
 from evasion_shield import NormalizedField, normalize_text
+from injection_radar import injection_radar_stage
+from intent_aligner import intent_aligner_stage
+from policy_dsl import policy_dsl_stage
 from sentinel_proxy.context import SentinelContext
 from sentinel_proxy.models import DecisionValue, InterceptDecision, InterceptRequest
+from trace_dag import trace_dag_stage
 
 PipelineStage = Callable[[InterceptRequest, SentinelContext], InterceptDecision]
 
@@ -16,8 +20,9 @@ class SentinelPipeline:
 
     def evaluate(self, request: InterceptRequest, context: SentinelContext) -> InterceptDecision:
         stage_decisions: list[dict[str, Any]] = []
-        selected = InterceptDecision("allow", "pipeline", "all TP-01 stub stages allowed")
+        selected = InterceptDecision("allow", "pipeline", "all sentinel stages allowed")
         first_ask: InterceptDecision | None = None
+        first_block: InterceptDecision | None = None
 
         for stage_name, stage in self.stages:
             decision = stage(request, context)
@@ -30,13 +35,14 @@ class SentinelPipeline:
             )
             stage_decisions.append(normalized.to_dict())
 
-            if normalized.decision == "block":
-                selected = normalized
-                break
+            if normalized.decision == "block" and first_block is None:
+                first_block = normalized
             if normalized.decision == "ask" and first_ask is None:
                 first_ask = normalized
 
-        if selected.decision != "block" and first_ask is not None:
+        if first_block is not None:
+            selected = first_block
+        elif first_ask is not None:
             selected = first_ask
 
         return InterceptDecision(
@@ -73,10 +79,10 @@ class ToolNameDecisionStage:
 def default_stages() -> list[tuple[str, PipelineStage]]:
     return [
         ("normalizer", _normalizer_stage),
-        ("radar", _allow_stage("radar_stub")),
-        ("aligner", _allow_stage("aligner_stub")),
-        ("policy", _allow_stage("policy_stub")),
-        ("trace", _allow_stage("trace_stub")),
+        ("injection_radar", injection_radar_stage),
+        ("intent_aligner", intent_aligner_stage),
+        ("policy_dsl", policy_dsl_stage),
+        ("trace_dag", trace_dag_stage),
     ]
 
 

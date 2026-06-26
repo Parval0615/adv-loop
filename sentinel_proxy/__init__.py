@@ -1,4 +1,4 @@
-"""MCP-Sentinel proxy skeleton for TP-01."""
+"""MCP-Sentinel interception pipeline for the local deterministic arena."""
 
 from sentinel_proxy.context import SentinelContext
 from sentinel_proxy.interceptor import SentinelInterceptor

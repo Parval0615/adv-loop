@@ -16,6 +16,7 @@ class InterceptRequest:
     name: str
     arguments: dict[str, Any] = field(default_factory=dict)
     parent_id: str | None = None
+    intercept_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -38,9 +39,11 @@ class InterceptResult:
     executed: bool
     decision: InterceptDecision
     response: Any
+    intercept_id: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "intercept_id": self.intercept_id,
             "executed": self.executed,
             "decision": self.decision.to_dict(),
             "response": self.response,
