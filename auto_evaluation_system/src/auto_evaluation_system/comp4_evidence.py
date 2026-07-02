@@ -333,7 +333,7 @@ def _write_ablation_table(run_dir: Path, ablation: dict[str, Any]) -> Path:
 
 def _write_datacard(run_dir: Path, convergence: dict[str, Any], metrics: dict[str, Any]) -> Path:
     path = run_dir / "benchmark_datacard.md"
-    lines = ["# AgentRiskBench-Ecommerce · 数据卡", ""]
+    lines = ["# MCP-Sentinel · AgentRiskBench-Ecommerce 数据卡", ""]
     lines.append("## 概述")
     lines.append("")
     lines.append(
@@ -370,7 +370,6 @@ def _write_datacard(run_dir: Path, convergence: dict[str, Any], metrics: dict[st
     lines.append("")
     lines.append("- 仅作用于本地合成电商靶场,不接真实交易/支付/用户数据。")
     lines.append("- 攻击 payload 与投毒数据均为合成,不含真实 PII。")
-    lines.append("")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
 
@@ -379,9 +378,9 @@ def _write_evidence_pack(
     run_dir: Path, metrics: dict[str, Any], artifacts: dict[str, Path]
 ) -> Path:
     path = run_dir / "evidence_pack.md"
-    lines = ["# 竞赛证据包总览", ""]
+    lines = ["# MCP-Sentinel 竞赛证据包总览", ""]
     lines.append(
-        "本目录汇总多智能体对抗自进化框架的答辩证据：收敛曲线、损伤雷达图、"
+        "本目录汇总 MCP-Sentinel 多智能体安全自治闭环的答辩证据：收敛曲线、损伤雷达图、"
         "消融实验与可复用 Benchmark 数据卡。"
     )
     lines.append("")
@@ -412,7 +411,6 @@ def _write_evidence_pack(
     lines.append("| `damage_radar.png` | 加固前后多维损伤雷达图 |")
     lines.append("| `ablation.json` / `ablation_table.md` | 三组消融对照 |")
     lines.append("| `benchmark_datacard.md` | AgentRiskBench-Ecommerce 数据卡 |")
-    lines.append("")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
 

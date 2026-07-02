@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Parval0615/Agent-Runtime-Security-Lab/schemas/trajectory-v1.schema.json",
+  "$id": "https://github.com/Parval0615/mcp-sentinel/blob/main/auto_evaluation_system/schemas/trajectory-v1.schema.json",
   "title": "Agent Trajectory v1",
   "description": "Standardized agent trajectory. Each step has an explicit step_type.",
   "type": "object",

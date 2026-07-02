@@ -33,7 +33,7 @@ storage/
 logs/
 
 # Local nested clone used during manual merge
-Agent-Runtime-Security-Lab/
+mcp-sentinel/
 
 # IDE / OS
 .idea/

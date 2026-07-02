@@ -1,7 +1,7 @@
 [project]
-name = "ai-security-integrated-system"
+name = "mcp-sentinel"
 version = "0.1.0"
-description = "Integrated automatic defense, attack, and evaluation systems for AI security research"
+description = "LLM-driven multi-agent security autonomy system with attack, defense, evaluation, and traceable closed-loop execution"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
@@ -44,7 +44,7 @@ attack = [
 ]
 dev = ["pytest", "ruff", "jsonschema>=4", "cryptography"]
 all = [
-  "ai-security-integrated-system[attack,defense,evaluation,product,dev]",
+  "mcp-sentinel[attack,defense,evaluation,product,dev]",
 ]
 
 [build-system]
@@ -52,6 +52,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
+namespaces = false
 where = [
   ".",
   "auto_attack_system/src",

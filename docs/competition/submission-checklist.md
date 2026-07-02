@@ -1,67 +1,62 @@
-# AdvLoop 提交前检查清单
+# MCP-Sentinel 提交前检查清单
+
+## 项目身份
+
+- [ ] 展示名称仅使用 `MCP-Sentinel`
+- [ ] GitHub 仓库为 `Parval0615/mcp-sentinel`
+- [ ] 本地根目录为 `D:\mcp-sentinel`
+- [ ] Python 发行包名为 `mcp-sentinel`
+- [ ] 不再出现旧项目名、旧仓库 URL或其他赛题主线
 
 ## 必须包含
 
-- 根目录 `README.md`
+- `README.md`
 - `ROADMAP.md`
+- `competition-strategy.md`
 - `docs/competition/README.md`
 - `docs/competition/final-report.md`
 - `docs/competition/comp1-agent-demo-script.md`
-- `docs/competition/defense-script-8min.md`，历史安全攻防补充讲稿
 - `docs/competition/reproducibility.md`
 - `docs/competition/submission-checklist.md`
-- `docs/competition/evidence-pack/`，作为历史安全可靠性补充证据
-- `task_agent/`
-- `trace_dag/`
-- `auto_attack_system/`
-- `auto_defense_system/`
-- `auto_evaluation_system/`
-- `sdk/python/`
-- `run.py`
-- `pyproject.toml`
+- `docs/competition/evidence-pack/`
+- `run.py`、`pyproject.toml`
+- Task、Attack、Defense、Evaluation、MCP 拦截和 trace 相关源码
 
-## 固定文档和证据文件
+## 固定证据
 
-确认以下文件存在：
+- `convergence.json` 与 `convergence_curve.png`
+- `ablation.json` 与 `ablation_table.md`
+- `damage_radar.png`
+- `benchmark_datacard.md`
+- `evidence_pack.md`
+- 所有 Markdown 数字必须能从对应 JSON 推导
 
-- `docs/competition/final-report.md`
-- `docs/competition/comp1-agent-demo-script.md`
-- `docs/competition/evidence-pack/convergence_curve.png`
-- `docs/competition/evidence-pack/damage_radar.png`
-- `docs/competition/evidence-pack/convergence.json`
-- `docs/competition/evidence-pack/ablation.json`
-- `docs/competition/evidence-pack/ablation_table.md`
-- `docs/competition/evidence-pack/benchmark_datacard.md`
-- `docs/competition/evidence-pack/evidence_pack.md`
-- `docs/competition/evidence-pack/README.md`
+## 不得提交
 
-## 不要提交或打包
-
-- `.venv/`、`venv/`
-- `.pytest_cache/`、`.ruff_cache/`
-- `__pycache__/`
+- `.env`、API key、真实用户或企业数据
+- `.venv/`、`__pycache__/`、`.pytest_cache/`、`.ruff_cache/`
 - `runs/`、`attack-runs/`、`defense-runs/`、`evidence-runs/`
 - `logs/`、`storage/`
-- `.env`
+- 真实外部攻击 payload、真实支付或真实外部目标配置
 
-## 推荐提交方式
+## 验证命令
 
-优先从项目根目录导出提交包，不要混入本地运行产物、API key 或无关赛事目录。
-
-## 提交前验证命令
-
-```bash
+```powershell
+python run.py --attack-campaign --offline
+python run.py --defense-regression --offline
+python run.py --evidence-pack --offline
+python run.py --closed-loop-demo
 python run.py --agent-demo --offline
-python run.py --agent-task "找800元内降噪耳机比价后下单" --offline
-python run.py --task-eval --offline
-python -m pytest -q task_agent/tests trace_dag/tests auto_attack_system/tests auto_defense_system/tests auto_evaluation_system/tests
-python -m compileall -q auto_attack_system auto_defense_system auto_evaluation_system sdk task_agent trace_dag
+python -m pytest -q
+python -m compileall -q auto_attack_system auto_defense_system auto_evaluation_system sdk task_agent trace_dag arena evasion_shield injection_radar intent_aligner policy_dsl sentinel_console sentinel_proxy
+git diff --check
 ```
 
-## 关键数字一致性
+## 口径检查
 
-- `python run.py --agent-demo --offline`：`basic-search` 与 `replan-stock-recovery` 均 `GOAL_ACHIEVED=True`。
-- `replan-stock-recovery`：首步 `cart_add_item` 因库存不足 blocked，随后 `REPLANS=1` 并成功加购。
-- `python run.py --agent-task "找800元内降噪耳机比价后下单" --offline`：`GOAL_ACHIEVED=True`，轨迹为 `product_search > cart_add_item > create_order`。
-- `python run.py --task-eval --offline`：`total_tasks=3`，`achieved_tasks=3`，`task_achievement_rate=1.000000`，`invalid_tool_call_rate=0.000000`。
-- 历史安全攻防补充：ASR 44% -> 0%，7 轮收敛，证据位于 `docs/competition/evidence-pack/`。
+- [ ] 离线确定性结果没有被称为真实模型结果
+- [ ] 脚本化重规划场景没有被称为真实模型自主规划证据
+- [ ] 固定证据数字来自当前代码重新运行
+- [ ] 电商与 MCP 场景均明确为本地合成环境
+- [ ] 项目主语始终是多智能体安全自治系统
+- [ ] 八分钟演示覆盖任务解析、规划、执行、环境反馈、自主决策、重规划和量化验证

@@ -2,7 +2,7 @@
 
 Agent 运行时安全研究基础设施 — 从零构建可观测、可重放、可注入、可检测的实验平台。
 
-**远程仓库：** https://github.com/Parval0615/Agent-Runtime-Security-Lab
+**远程仓库：** https://github.com/Parval0615/mcp-sentinel
 
 ## 研究路线
 
@@ -18,7 +18,7 @@ Agent 运行时安全研究基础设施 — 从零构建可观测、可重放、
 ## 仓库结构
 
 ```
-Agent-Runtime-Security-Lab/
+mcp-sentinel/
 ├── ROADMAP.md                 # 完整研究路线图
 ├── src/arl/                   # 核心 Python 包（按阶段组织）
 │   ├── sandbox/               # Phase 1 · 执行层
@@ -45,8 +45,8 @@ Agent-Runtime-Security-Lab/
 
 ```powershell
 # 克隆
-git clone https://github.com/Parval0615/Agent-Runtime-Security-Lab.git
-cd Agent-Runtime-Security-Lab
+git clone https://github.com/Parval0615/mcp-sentinel.git
+cd mcp-sentinel
 
 # Python 环境
 python -m venv .venv

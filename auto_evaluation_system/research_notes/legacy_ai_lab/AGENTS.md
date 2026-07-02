@@ -4,7 +4,7 @@
 
 **Agent Runtime Security Lab** — Agent 运行时安全研究基础设施。
 
-- **远程仓库：** https://github.com/Parval0615/Agent-Runtime-Security-Lab
+- **远程仓库：** https://github.com/Parval0615/mcp-sentinel
 - **路线图：** [ROADMAP.md](./ROADMAP.md)
 - **架构：** [docs/architecture/README.md](./docs/architecture/README.md)
 

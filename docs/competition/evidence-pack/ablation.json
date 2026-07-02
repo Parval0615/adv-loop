@@ -9,7 +9,7 @@
     },
     {
       "coverage": 7,
-      "final_asr": 0.4375,
+      "final_asr": 0.3043,
       "name": "no_defense",
       "name_cn": "去掉 Defense Agent",
       "note": "无加固,ASR 始终高位 → 证明防御不可或缺。"
