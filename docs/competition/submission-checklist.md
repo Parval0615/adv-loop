@@ -6,10 +6,13 @@
 - `ROADMAP.md`
 - `docs/competition/README.md`
 - `docs/competition/final-report.md`
-- `docs/competition/defense-script-8min.md`
+- `docs/competition/comp1-agent-demo-script.md`
+- `docs/competition/defense-script-8min.md`，历史安全攻防补充讲稿
 - `docs/competition/reproducibility.md`
 - `docs/competition/submission-checklist.md`
-- `docs/competition/evidence-pack/`
+- `docs/competition/evidence-pack/`，作为历史安全可靠性补充证据
+- `task_agent/`
+- `trace_dag/`
 - `auto_attack_system/`
 - `auto_defense_system/`
 - `auto_evaluation_system/`
@@ -17,10 +20,12 @@
 - `run.py`
 - `pyproject.toml`
 
-## 固定证据文件
+## 固定文档和证据文件
 
 确认以下文件存在：
 
+- `docs/competition/final-report.md`
+- `docs/competition/comp1-agent-demo-script.md`
 - `docs/competition/evidence-pack/convergence_curve.png`
 - `docs/competition/evidence-pack/damage_radar.png`
 - `docs/competition/evidence-pack/convergence.json`
@@ -41,24 +46,22 @@
 
 ## 推荐提交方式
 
-优先从 `D:\adv-loop` 导出提交包，不要混入其他赛事目录或本地运行产物。
+优先从项目根目录导出提交包，不要混入本地运行产物、API key 或无关赛事目录。
 
 ## 提交前验证命令
 
-```powershell
-python run.py --closed-loop-demo
-python run.py --attack-campaign --offline
-python run.py --defense-regression --offline
-python run.py --evidence-pack --offline
-python -m pytest -q
-python -m compileall -q auto_attack_system auto_defense_system auto_evaluation_system sdk
+```bash
+python run.py --agent-demo --offline
+python run.py --agent-task "找800元内降噪耳机比价后下单" --offline
+python run.py --task-eval --offline
+python -m pytest -q task_agent/tests trace_dag/tests auto_attack_system/tests auto_defense_system/tests auto_evaluation_system/tests
+python -m compileall -q auto_attack_system auto_defense_system auto_evaluation_system sdk task_agent trace_dag
 ```
 
 ## 关键数字一致性
 
-- ASR：44% → 0%
-- 收敛轮数：7
-- Attack reflection 消融：2/7 vs 7/7
-- Defense 消融：ASR 保持 44%
-- 精准加固误伤率：0%
-- 全量测试：215 passed, 1 skipped, 2 warnings
+- `python run.py --agent-demo --offline`：`basic-search` 与 `replan-stock-recovery` 均 `GOAL_ACHIEVED=True`。
+- `replan-stock-recovery`：首步 `cart_add_item` 因库存不足 blocked，随后 `REPLANS=1` 并成功加购。
+- `python run.py --agent-task "找800元内降噪耳机比价后下单" --offline`：`GOAL_ACHIEVED=True`，轨迹为 `product_search > cart_add_item > create_order`。
+- `python run.py --task-eval --offline`：`total_tasks=3`，`achieved_tasks=3`，`task_achievement_rate=1.000000`，`invalid_tool_call_rate=0.000000`。
+- 历史安全攻防补充：ASR 44% -> 0%，7 轮收敛，证据位于 `docs/competition/evidence-pack/`。

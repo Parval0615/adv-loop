@@ -4,9 +4,10 @@
 (escalation ladder)：从最朴素的攻击手法到最强的手法，索引即"成熟度等级"。
 攻击 Agent 失败后通过反思沿阶梯向上升级。
 
-合成本地靶场 ``SyntheticTarget`` 是 *确定性* 的：每个威胁类别有一个
+合成本地靶场 ``SyntheticTarget`` 默认是 *确定性* 的：每个威胁类别有一个
 ``resistance`` 阈值，攻击成熟度 ≥ 阈值才能突破。这样可以让"反思 → 升级"
 的进化效果**可见且可复现**——朴素攻击被拦，升级后才打穿，攻击面覆盖随之提升。
+在线模式可注入 ``online_judge`` 裁判；裁判不可用或返回非法结果时仍回退阈值逻辑。
 
 边界：所有攻击仅作用于本地合成靶场，payload 均为合成、无真实 PII。
 """
@@ -14,6 +15,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any, Callable
 
 
 # 7 类威胁（与 ROADMAP 威胁分类法对齐）
@@ -130,6 +132,9 @@ class TargetResponse:
     defense_signal: str
 
 
+OnlineJudge = Callable[[dict[str, Any]], TargetResponse | dict[str, Any] | bool | None]
+
+
 @dataclass
 class SyntheticTarget:
     """确定性本地靶场：模拟电商 RAG Agent 的防御姿态。
@@ -142,8 +147,40 @@ class SyntheticTarget:
         default_factory=lambda: dict(DEFAULT_TARGET_RESISTANCE)
     )
 
-    def attempt(self, category: str, ladder_index: int) -> TargetResponse:
+    def attempt(
+        self,
+        category: str,
+        ladder_index: int,
+        *,
+        payload: str | None = None,
+        online_judge: OnlineJudge | None = None,
+    ) -> TargetResponse:
         threshold = self.resistance.get(category, 0)
+        if online_judge is not None:
+            try:
+                judged = online_judge(
+                    {
+                        "category": category,
+                        "category_cn": THREAT_CATEGORIES.get(category, category),
+                        "ladder_index": ladder_index,
+                        "threshold": threshold,
+                        "payload": payload,
+                    }
+                )
+                response = self._coerce_online_judge_response(
+                    judged, category=category, ladder_index=ladder_index
+                )
+                if response is not None:
+                    return response
+            except Exception:
+                pass
+
+        return self._threshold_attempt(category, ladder_index, threshold)
+
+    @staticmethod
+    def _threshold_attempt(
+        category: str, ladder_index: int, threshold: int
+    ) -> TargetResponse:
         if ladder_index >= threshold:
             return TargetResponse(
                 blocked=False,
@@ -164,6 +201,71 @@ class SyntheticTarget:
             defense_signal="blocked",
         )
 
+    @staticmethod
+    def _coerce_online_judge_response(
+        judged: TargetResponse | dict[str, Any] | bool | None,
+        *,
+        category: str,
+        ladder_index: int,
+    ) -> TargetResponse | None:
+        if isinstance(judged, TargetResponse):
+            return judged
+        if isinstance(judged, bool):
+            return TargetResponse(
+                blocked=not judged,
+                success=judged,
+                reason=(
+                    f"在线裁判判定 L{ladder_index} "
+                    f"{'突破' if judged else '未突破'} "
+                    f"{THREAT_CATEGORIES.get(category, category)} 防线。"
+                ),
+                defense_signal="bypassed" if judged else "blocked",
+            )
+        if not isinstance(judged, dict):
+            return None
+
+        success = SyntheticTarget._bool_value(judged.get("success"))
+        blocked = SyntheticTarget._bool_value(judged.get("blocked"))
+        if success is None and blocked is None:
+            return None
+        if success is None:
+            success = not blocked
+        if blocked is None:
+            blocked = not success
+
+        reason = judged.get("reason")
+        defense_signal = judged.get("defense_signal")
+        return TargetResponse(
+            blocked=blocked,
+            success=success,
+            reason=(
+                str(reason)
+                if reason
+                else (
+                    f"在线裁判判定 L{ladder_index} "
+                    f"{'突破' if success else '未突破'} "
+                    f"{THREAT_CATEGORIES.get(category, category)} 防线。"
+                )
+            ),
+            defense_signal=(
+                str(defense_signal)
+                if defense_signal
+                else ("bypassed" if success else "blocked")
+            ),
+        )
+
+    @staticmethod
+    def _bool_value(value: Any) -> bool | None:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"true", "yes", "1", "success", "bypassed"}:
+                return True
+            if normalized in {"false", "no", "0", "blocked", "fail", "failed"}:
+                return False
+        return None
+
 
 def ladder_for(category: str) -> list[AttackStrategy]:
     return ESCALATION_LADDERS[category]
@@ -175,6 +277,7 @@ __all__ = [
     "ESCALATION_LADDERS",
     "DEFAULT_TARGET_RESISTANCE",
     "TargetResponse",
+    "OnlineJudge",
     "SyntheticTarget",
     "ladder_for",
 ]

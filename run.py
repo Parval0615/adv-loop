@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +12,12 @@ SOURCE_DIRS = (
     "auto_attack_system/src",
     "auto_defense_system/src",
     "auto_evaluation_system/src",
+    ".",
+)
+DEFAULT_TASK_EVAL_INSTRUCTIONS = (
+    "搜索降噪耳机",
+    "搜索智能手表",
+    "联系平台招商客服说明订单问题",
 )
 
 
@@ -18,6 +25,34 @@ def main() -> int:
     args = _parse_args()
     repo_root = REPO_ROOT
     _add_source_paths(repo_root)
+
+    if args.agent_task is not None:
+        from task_agent import TaskAgent
+        from task_agent.trace_adapter import export_plan_trace
+
+        result = TaskAgent(force_offline=args.offline).run(args.agent_task)
+        run_dir = _resolve_agent_results_root(repo_root, args.results_root, "task-agent")
+        artifacts = export_plan_trace(result, run_dir)
+        _print_agent_summary(result, run_dir=run_dir, artifacts=artifacts)
+        return 0
+
+    if args.agent_demo:
+        _run_agent_demo(repo_root=repo_root, results_root=args.results_root, force_offline=args.offline)
+        return 0
+
+    if args.task_eval:
+        try:
+            report, report_path = _run_task_evaluation(
+                repo_root=repo_root,
+                results_root=args.results_root,
+                task_file=args.task_file,
+                force_offline=args.offline,
+            )
+        except ValueError as exc:
+            print(f"TASK_EVAL_ERROR={exc}", file=sys.stderr)
+            return 2
+        _print_task_eval_summary(report, report_path=report_path)
+        return 0
 
     if args.evidence_pack:
         from auto_evaluation_system.comp4_evidence import run_comp4_demo
@@ -143,9 +178,30 @@ def _parse_args() -> argparse.Namespace:
         help=argparse.SUPPRESS,
     )
     parser.add_argument(
+        "--agent-task",
+        default=None,
+        help="Run one autonomous ecommerce TaskAgent instruction and export trace artifacts.",
+    )
+    parser.add_argument(
+        "--agent-demo",
+        action="store_true",
+        help="Run preset TaskAgent demos, including a stock-failure replanning scenario.",
+    )
+    parser.add_argument(
+        "--task-eval",
+        action="store_true",
+        help="Run the batch TaskAgent evaluation and write task_evaluation_report.json.",
+    )
+    parser.add_argument(
+        "--task-file",
+        type=Path,
+        default=None,
+        help="Task evaluation input file: line-delimited text or a JSON array of task instructions.",
+    )
+    parser.add_argument(
         "--offline",
         action="store_true",
-        help="Force deterministic offline mode for attack, defense, and evidence-pack runs (no LLM API calls).",
+        help="Force deterministic offline mode for task-agent, attack, defense, and evidence-pack runs (no LLM API calls).",
     )
     parser.add_argument(
         "--results-root",
@@ -157,7 +213,10 @@ def _parse_args() -> argparse.Namespace:
             "(defaults to runs/closed-loop-<timestamp>)."
         ),
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.task_file is not None and not args.task_eval:
+        parser.error("--task-file requires --task-eval")
+    return args
 
 
 def _add_source_paths(repo_root: Path) -> None:
@@ -175,6 +234,15 @@ def _default_results_root(repo_root: Path) -> Path:
 def _resolve_results_root(repo_root: Path, requested: Path | None) -> Path:
     if requested is None:
         return _default_results_root(repo_root)
+    if requested.is_absolute():
+        return requested
+    return repo_root / requested
+
+
+def _resolve_agent_results_root(repo_root: Path, requested: Path | None, prefix: str) -> Path:
+    if requested is None:
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        return repo_root / "runs" / f"{prefix}-{stamp}"
     if requested.is_absolute():
         return requested
     return repo_root / requested
@@ -199,6 +267,220 @@ def _print_summary(report) -> None:
         if record.failure_notes:
             for note in record.failure_notes:
                 print(f"  failure: {note}")
+
+
+def _run_task_evaluation(
+    *,
+    repo_root: Path,
+    results_root: Path | None,
+    task_file: Path | None,
+    force_offline: bool,
+):
+    from auto_evaluation_system.task_eval import evaluate_task_runs
+    from task_agent import TaskAgent
+
+    instructions = _load_task_eval_instructions(task_file)
+    results = [
+        TaskAgent(force_offline=force_offline).run(instruction)
+        for instruction in instructions
+    ]
+    report = evaluate_task_runs(results)
+
+    run_dir = _resolve_agent_results_root(repo_root, results_root, "task-eval")
+    run_dir.mkdir(parents=True, exist_ok=True)
+    report_path = run_dir / "task_evaluation_report.json"
+    report_path.write_text(_task_eval_report_json(report), encoding="utf-8")
+    return report, report_path
+
+
+def _load_task_eval_instructions(task_file: Path | None) -> list[str]:
+    if task_file is None:
+        return list(DEFAULT_TASK_EVAL_INSTRUCTIONS)
+
+    try:
+        content = task_file.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise ValueError(f"cannot read task file {task_file}: {exc}") from exc
+
+    if not content.strip():
+        raise ValueError(f"task file {task_file} is empty or contains no task instructions")
+
+    stripped = content.lstrip()
+    if task_file.suffix.lower() == ".json" or stripped.startswith("["):
+        try:
+            parsed = json.loads(content)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"task file {task_file} must be a JSON array of strings") from exc
+        if not isinstance(parsed, list):
+            raise ValueError(f"task file {task_file} must be a JSON array of strings")
+        return _normalize_task_eval_instructions(parsed, source=f"task file {task_file}")
+
+    return _normalize_task_eval_instructions(content.splitlines(), source=f"task file {task_file}")
+
+
+def _normalize_task_eval_instructions(values, *, source: str) -> list[str]:
+    instructions: list[str] = []
+    for index, value in enumerate(values, start=1):
+        if not isinstance(value, str):
+            raise ValueError(f"{source} item {index} must be a string")
+        text = value.strip()
+        if text:
+            instructions.append(text)
+    if not instructions:
+        raise ValueError(f"{source} is empty or contains no task instructions")
+    return instructions
+
+
+def _task_eval_report_json(report) -> str:
+    data = report.model_dump() if hasattr(report, "model_dump") else report.dict()
+    return json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+
+
+def _print_task_eval_summary(report, *, report_path: Path) -> None:
+    metrics = report.metrics
+    print(f"TASK_EVAL_REPORT={report_path}")
+    print(f"schema_version={report.schema_version}")
+    print(f"total_tasks={metrics.total_tasks}")
+    print(f"achieved_tasks={metrics.achieved_tasks}")
+    print(f"task_achievement_rate={metrics.task_achievement_rate:.6f}")
+    print(f"average_steps={metrics.average_steps:.6f}")
+    print(f"replan_success_rate={metrics.replan_success_rate:.6f}")
+    print(f"invalid_tool_call_rate={metrics.invalid_tool_call_rate:.6f}")
+
+
+def _run_agent_demo(*, repo_root: Path, results_root: Path | None, force_offline: bool) -> None:
+    from auto_defense_system.ecommerce_agent.fixtures import create_demo_store
+    from task_agent import TaskAgent
+    from task_agent.trace_adapter import export_plan_trace
+
+    run_dir = _resolve_agent_results_root(repo_root, results_root, "agent-demo")
+
+    search_result = TaskAgent(force_offline=force_offline).run("搜索降噪耳机", max_steps=4)
+    search_artifacts = export_plan_trace(search_result, run_dir / "basic-search")
+    _print_agent_summary(
+        search_result,
+        scenario_id="basic-search",
+        run_dir=run_dir / "basic-search",
+        artifacts=search_artifacts,
+    )
+
+    store = create_demo_store()
+    store.products["p1001"].stock = 0
+    replan_result = TaskAgent(
+        store=store,
+        force_offline=force_offline,
+        llm=_DemoReplanLLM(),
+    ).run("把有货商品加入购物车", max_steps=4, max_replans=2)
+    replan_artifacts = export_plan_trace(replan_result, run_dir / "replan-stock-recovery")
+    _print_agent_summary(
+        replan_result,
+        scenario_id="replan-stock-recovery",
+        run_dir=run_dir / "replan-stock-recovery",
+        artifacts=replan_artifacts,
+    )
+
+
+class _DemoReplanLLM:
+    mode = "scripted-demo-offline"
+
+    def __init__(self) -> None:
+        self._replanned = False
+
+    def complete_json(
+        self,
+        system: str,
+        user: str,
+        *,
+        schema_hint,
+        seed: int = 0,
+        max_tokens: int = 1024,
+    ) -> dict:
+        from task_agent.prompts import (
+            ARGUMENT_GENERATION_SYSTEM_PROMPT,
+            EXECUTION_THOUGHT_SYSTEM_PROMPT,
+            GOAL_JUDGE_SYSTEM_PROMPT,
+            PLAN_GENERATION_SYSTEM_PROMPT,
+            REPLAN_SYSTEM_PROMPT,
+            TASK_PARSE_SYSTEM_PROMPT,
+        )
+
+        if system == TASK_PARSE_SYSTEM_PROMPT:
+            return {
+                "raw_instruction": "把有货商品加入购物车",
+                "goal": "把有货商品加入购物车",
+                "subgoals": ["尝试加入目标商品", "失败后选择有货替代商品"],
+                "constraints": {},
+                "entities": {"demo": "stock_replan"},
+                "parse_mode": "scripted-demo",
+            }
+        if system == PLAN_GENERATION_SYSTEM_PROMPT:
+            return {
+                "revision": 0,
+                "steps": [
+                    {
+                        "step_id": "add-original",
+                        "candidate_tool": "cart_add_item",
+                        "args_hint": {"product_id": "p1001", "quantity": 1},
+                    }
+                ],
+            }
+        if system == REPLAN_SYSTEM_PROMPT:
+            self._replanned = True
+            return {
+                "revision": 1,
+                "steps": [
+                    {
+                        "step_id": "add-alternative",
+                        "candidate_tool": "cart_add_item",
+                        "args_hint": {"product_id": "p2001", "quantity": 1},
+                    }
+                ],
+            }
+        if system == EXECUTION_THOUGHT_SYSTEM_PROMPT:
+            return {"thought": "执行当前计划，观察真实库存和业务规则反馈。"}
+        if system == ARGUMENT_GENERATION_SYSTEM_PROMPT:
+            return {}
+        if system == GOAL_JUDGE_SYSTEM_PROMPT:
+            return {"goal_achieved": self._replanned, "reason": "demo state rules should decide"}
+        return {}
+
+    def decide(self, system: str, user: str, *, choices: list[str], seed: int = 0) -> dict:
+        choice = choices[0] if choices else None
+        return {"choice": choice, "reason": "scripted demo chooses the planned tool"}
+
+
+def _print_agent_summary(result, *, run_dir: Path | None = None, artifacts: dict[str, str] | None = None, scenario_id: str | None = None) -> None:
+    if scenario_id:
+        print(f"SCENARIO={scenario_id}")
+    if run_dir is not None:
+        print(f"RUN_DIR={run_dir}")
+    if artifacts:
+        print(f"TRACE_GRAPH_MD={artifacts.get('trace_mermaid', '')}")
+        print(f"TRACE_TIMELINE={artifacts.get('trace_timeline', '')}")
+        print(f"TRACE_INTEGRITY={artifacts.get('trace_integrity', '')}")
+    print(f"AGENT_TASK={_one_line(result.task_spec.raw_instruction)}")
+    print(f"LLM_MODE={result.llm_mode}")
+    print(f"GOAL_ACHIEVED={result.goal_achieved}")
+    print(f"STEPS={len(result.trace)}")
+    print(f"PLANS={len(result.plans)}")
+    print(f"REPLANS={result.replan_count}")
+    print(f"FINAL_ANSWER={_one_line(result.final_answer)}")
+    if result.trace:
+        print(
+            "TRACE="
+            + " > ".join(
+                f"{index}:{step.action_tool}:{'blocked' if step.observation.blocked else 'ok'}"
+                f"{':replan' if step.replan_triggered else ''}"
+                for index, step in enumerate(result.trace, start=1)
+            )
+        )
+
+
+def _one_line(value, *, limit: int = 500) -> str:
+    text = " ".join(str(value).split())
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3] + "..."
 
 
 def _print_demo_summary(result) -> None:

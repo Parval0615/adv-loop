@@ -42,7 +42,7 @@ attack = [
   "numpy",
   "Pillow",
 ]
-dev = ["pytest", "ruff", "jsonschema>=4"]
+dev = ["pytest", "ruff", "jsonschema>=4", "cryptography"]
 all = [
   "ai-security-integrated-system[attack,defense,evaluation,product,dev]",
 ]
@@ -98,6 +98,7 @@ testpaths = [
   "sentinel_proxy/tests",
   "sentinel_console/tests",
   "trace_dag/tests",
+  "task_agent/tests",
   "auto_attack_system/tests",
   "auto_defense_system/tests",
   "auto_evaluation_system/tests",

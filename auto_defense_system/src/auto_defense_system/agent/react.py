@@ -1,3 +1,9 @@
+"""Legacy ReAct compatibility path.
+
+主任务执行链路已迁移到 ``task_agent/executor.py``；本模块仅保留给旧 RAG
+调用方和兼容测试使用。
+"""
+
 from langchain_openai import ChatOpenAI
 from auto_defense_system.config import LLM_MODEL, LLM_API_BASE, LLM_API_KEY
 from auto_defense_system.tools.sec_tools import SEC_AGENT_TOOLS

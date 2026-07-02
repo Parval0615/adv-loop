@@ -24,30 +24,90 @@ class EcommerceAgentResult:
     risk_level: RiskLevel = "normal"
 
 
+def invoke_ecommerce_agent_v2(
+    user_id: str,
+    role: str,
+    message: str,
+    store: EcommerceStore | None = None,
+    *,
+    force_offline: bool = True,
+    max_steps: int = 12,
+    max_replans: int = 3,
+) -> EcommerceAgentResult:
+    """TaskAgent-backed ecommerce entry used by competition demos and run.py."""
+    active_store = store or create_demo_store()
+    guard_result = _input_guard_result(user_id, role, message)
+    if guard_result is not None:
+        return guard_result
+
+    if _looks_like_recommendation_goal_drift(message):
+        return _result_from_tool_execution(_block_recommendation_goal_drift(user_id, role, message))
+
+    try:
+        from task_agent import TaskAgent
+
+        task_result = TaskAgent(
+            store=active_store,
+            user_id=user_id,
+            role=role,
+            force_offline=force_offline,
+        ).run(message, max_steps=max_steps, max_replans=max_replans)
+    except Exception as exc:
+        audit.write_audit_log(
+            user_id=user_id,
+            role=role,
+            operation="电商 v2 兼容兜底",
+            input_content=message,
+            result=str(exc),
+            risk_level="medium",
+        )
+        return _invoke_ecommerce_agent_legacy(active_store, user_id, role, message)
+
+    return _result_from_task_run(task_result)
+
+
 def invoke_ecommerce_agent(
     user_id: str,
     role: str,
     message: str,
     store: EcommerceStore | None = None,
 ) -> EcommerceAgentResult:
+    """Legacy compatibility entry for existing single-step ecommerce API tests."""
     active_store = store or create_demo_store()
-    blocked, guard_message = check_malicious_input(message)
-    if blocked:
-        audit.write_audit_log(
-            user_id=user_id,
-            role=role,
-            operation="电商输入拦截",
-            input_content=message,
-            result=guard_message,
-            risk_level="high",
-        )
-        return EcommerceAgentResult(
-            answer=guard_message,
-            audit_events=[AuditEvent("电商输入拦截", "high", guard_message).to_dict()],
-            blocked=True,
-            risk_level="high",
-        )
+    guard_result = _input_guard_result(user_id, role, message)
+    if guard_result is not None:
+        return guard_result
 
+    return _invoke_ecommerce_agent_legacy(active_store, user_id, role, message)
+
+
+def _input_guard_result(user_id: str, role: str, message: str) -> EcommerceAgentResult | None:
+    blocked, guard_message = check_malicious_input(message)
+    if not blocked:
+        return None
+
+    audit.write_audit_log(
+        user_id=user_id,
+        role=role,
+        operation="电商输入拦截",
+        input_content=message,
+        result=guard_message,
+        risk_level="high",
+    )
+    return EcommerceAgentResult(
+        answer=guard_message,
+        audit_events=[AuditEvent("电商输入拦截", "high", guard_message).to_dict()],
+        blocked=True,
+        risk_level="high",
+    )
+
+
+def _invoke_ecommerce_agent_legacy(
+    active_store: EcommerceStore,
+    user_id: str,
+    role: str,
+    message: str,
+) -> EcommerceAgentResult:
     try:
         execution = _route_message(active_store, user_id, role, message)
     except Exception as exc:
@@ -65,6 +125,10 @@ def invoke_ecommerce_agent(
             blocked=True,
             risk_level="high",
         )
+    return _result_from_tool_execution(execution)
+
+
+def _result_from_tool_execution(execution: ToolExecution) -> EcommerceAgentResult:
     answer = mask_sensitive_info(execution.answer)
     return EcommerceAgentResult(
         answer=answer,
@@ -74,6 +138,110 @@ def invoke_ecommerce_agent(
         blocked=execution.blocked,
         risk_level=execution.risk_level,
     )
+
+
+def _result_from_task_run(task_result: Any) -> EcommerceAgentResult:
+    trace = getattr(task_result, "trace", []) or []
+    tool_calls: list[dict[str, Any]] = []
+    business_events: list[dict[str, Any]] = []
+    audit_events: list[dict[str, Any]] = []
+    risk_levels: list[Any] = []
+    blocked_observations = 0
+
+    for step in trace:
+        observation = getattr(step, "observation", None)
+        if observation is None:
+            continue
+        risk_level = getattr(observation, "risk_level", "normal")
+        risk_levels.append(risk_level)
+        if getattr(observation, "blocked", False):
+            blocked_observations += 1
+
+        summary = getattr(observation, "summary", {}) or {}
+        step_tool_calls: list[dict[str, Any]] = []
+        if isinstance(summary, dict):
+            step_tool_calls = _event_dicts(summary.get("tool_calls"))
+            business_events.extend(_event_dicts(summary.get("business_events")))
+            audit_events.extend(_event_dicts(summary.get("audit_events")))
+        if step_tool_calls:
+            tool_calls.extend(step_tool_calls)
+        else:
+            fallback_call = _task_step_tool_call(step, observation)
+            if fallback_call:
+                tool_calls.append(fallback_call)
+
+    final_answer = getattr(task_result, "final_answer", "")
+    if not isinstance(final_answer, str):
+        final_answer = str(final_answer)
+    goal_achieved = getattr(task_result, "goal_achieved", False) is True
+
+    return EcommerceAgentResult(
+        answer=mask_sensitive_info(final_answer),
+        tool_calls=tool_calls,
+        business_events=business_events,
+        audit_events=audit_events,
+        blocked=bool(blocked_observations) and not goal_achieved,
+        risk_level=_max_risk_level(risk_levels),
+    )
+
+
+def _event_dicts(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    events = []
+    for item in value:
+        if isinstance(item, dict):
+            events.append(dict(item))
+        elif hasattr(item, "to_dict"):
+            events.append(item.to_dict())
+    return events
+
+
+def _task_step_tool_call(step: Any, observation: Any) -> dict[str, Any] | None:
+    tool_name = getattr(step, "action_tool", "")
+    if not isinstance(tool_name, str) or not tool_name:
+        return None
+    arguments = getattr(step, "action_args", {})
+    if not isinstance(arguments, dict):
+        arguments = {}
+    answer = getattr(observation, "answer", "")
+    if not isinstance(answer, str):
+        answer = str(answer)
+    risk_level = getattr(observation, "risk_level", "normal")
+    return {
+        "tool_name": tool_name,
+        "arguments": _mask_argument_values(arguments),
+        "allowed": not bool(getattr(observation, "blocked", False)),
+        "result": mask_sensitive_info(answer),
+        "risk_level": risk_level if isinstance(risk_level, str) else "normal",
+        "reason": getattr(step, "decision_reason", ""),
+    }
+
+
+def _mask_argument_values(arguments: dict[str, Any]) -> dict[str, Any]:
+    safe: dict[str, Any] = {}
+    for key, value in arguments.items():
+        safe[key] = mask_sensitive_info(value) if isinstance(value, str) else value
+    return safe
+
+
+_RISK_LEVEL_ORDER = {
+    "normal": 0,
+    "low": 1,
+    "medium": 2,
+    "high": 3,
+    "critical": 4,
+}
+
+
+def _max_risk_level(levels: list[Any]) -> RiskLevel:
+    selected: RiskLevel = "normal"
+    for level in levels:
+        if not isinstance(level, str):
+            continue
+        if _RISK_LEVEL_ORDER.get(level, 0) > _RISK_LEVEL_ORDER[selected]:
+            selected = level  # type: ignore[assignment]
+    return selected
 
 
 def _route_message(store: EcommerceStore, user_id: str, role: str, message: str) -> ToolExecution:

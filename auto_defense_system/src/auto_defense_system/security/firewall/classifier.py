@@ -7,7 +7,6 @@ Layer 1 策略（v2 迭代）：
 """
 
 from typing import Optional
-from langchain_openai import ChatOpenAI
 from auto_defense_system.config import LLM_MODEL, LLM_API_BASE, LLM_API_KEY
 from auto_defense_system.security.firewall.input_guard import check_malicious_input
 
@@ -16,16 +15,29 @@ import logging
 import re
 import time
 import unicodedata
-from json_repair import repair_json
 
 logger = logging.getLogger(__name__)
 
 _classifier_llm = None
 
 
+def _load_chat_openai():
+    try:
+        from langchain_openai import ChatOpenAI
+    except ModuleNotFoundError as exc:
+        if exc.name == "langchain_openai":
+            raise RuntimeError(
+                "Layer 2 classifier requires optional dependency 'langchain-openai'. "
+                "Install the defense extras to enable LLM classification."
+            ) from exc
+        raise
+    return ChatOpenAI
+
+
 def _get_classifier_llm():
     global _classifier_llm
     if _classifier_llm is None:
+        ChatOpenAI = _load_chat_openai()
         _classifier_llm = ChatOpenAI(
             model=LLM_MODEL,
             temperature=0.0,
@@ -316,6 +328,15 @@ def _robust_parse_json(text: str) -> dict | None:
     except json.JSONDecodeError:
         pass
 
+    def repair_json_if_available(raw: str) -> str | None:
+        try:
+            from json_repair import repair_json
+        except ModuleNotFoundError as exc:
+            if exc.name == "json_repair":
+                return None
+            raise
+        return repair_json(raw)
+
     # Layer 3: 正则提取最外层 JSON 对象
     match = re.search(r'\{[\s\S]*\}', text)
     if match:
@@ -327,15 +348,17 @@ def _robust_parse_json(text: str) -> dict | None:
 
         # Layer 4: json_repair 修复提取的 JSON
         try:
-            repaired = repair_json(extracted)
-            return json.loads(repaired)
+            repaired = repair_json_if_available(extracted)
+            if repaired is not None:
+                return json.loads(repaired)
         except Exception:
             pass
 
     # Layer 5: json_repair 修复原始文本
     try:
-        repaired = repair_json(text)
-        return json.loads(repaired)
+        repaired = repair_json_if_available(text)
+        if repaired is not None:
+            return json.loads(repaired)
     except Exception:
         pass
 

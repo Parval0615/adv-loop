@@ -1,59 +1,52 @@
 # 竞赛资料入口
 
-本目录保存 **AdvLoop「智驭」赛事一基线** 的正式报告、讲稿、固定证据包和复现说明。仓库当前主线已经切换到 **MCP-Sentinel「关哨」赛事二规划**，请先阅读根目录 [`README.md`](../../README.md) 和 [`ROADMAP.md`](../../ROADMAP.md) 了解当前方向。
+本目录保存 AdvLoop「智驭」赛事一资料。当前提交主线已统一为 **大模型驱动的电商领域自治任务智能体**：系统接收自然语言购物任务后，完成任务解析、计划生成、真实电商工具调用、环境感知、动态重规划和目标达成判定。
+
+安全攻防能力仍保留为可靠性保障和历史证据，不再作为本目录的主叙事。
 
 ## 当前主线
 
-MCP-Sentinel 面向在线 LLM Agent 的提示注入与工具滥用防护，目标形态是 MCP-in-the-middle 中间代理，覆盖：
+| 能力 | 当前落点 | 证据 |
+|---|---|---|
+| 任务解析与计划生成 | `task_agent/planner.py`、`TaskSpec`、`Plan` | [`final-report.md`](./final-report.md) |
+| ReAct 执行与真实工具调用 | `task_agent/executor.py`、`tool_registry.py` | [`comp1-agent-demo-script.md`](./comp1-agent-demo-script.md) |
+| 环境感知与动态重规划 | blocked、缺货、预算不足等 observation 触发 `replan()` | `runs/agent-demo-<run-id>/replan-stock-recovery/` |
+| 目标达成与批量评测 | `auto_evaluation_system/task_eval.py` | `runs/task-eval-<run-id>/task_evaluation_report.json` |
+| 证据可追溯 | `trace_graph.md`、`trace_timeline.jsonl`、`trace_integrity.json` | `task_agent/trace_adapter.py` |
 
-| 能力 | Roadmap 对应 |
-|---|---|
-| 多源注入识别 | TP-02、TP-03、TP-08 |
-| 意图 - 计划 - 工具语义对齐研判 | TP-04 |
-| 语义策略 DSL 与三态决策 | TP-05 |
-| 跨 MCP / 子 Agent 溯源 DAG | TP-06、TP-09 |
-| 检测 → 研判 → 阻断 → 溯源闭环 | TP-07 |
-
-## 既有 AdvLoop 基线
-
-AdvLoop / 智驭是一个面向 LLM 安全任务的**多智能体自治闭环系统**：Attack Agent 解析任务并规划攻击，Evaluation Agent 感知环境并量化风险，Defense Agent 自主选择加固动作，并在本地电商 RAG 场景中验证收敛。
-
-多数 Agent 项目展示的是“用 Agent 完成一个业务任务”。AdvLoop 展示的是“让多个 Agent 自己完成安全任务闭环”：系统自动发现风险、量化损伤、选择加固动作，并用同一攻击集回归验证决策效果。
-
-## 固定结果
+## 已验证结果
 
 | 结论 | 当前结果 | 证据 |
 |---|---:|---|
-| 自治闭环可收敛 | ASR 44% -> 0%，7 轮收敛 | [`evidence-pack/convergence_curve.png`](./evidence-pack/convergence_curve.png) |
-| 攻击反思有效 | 无 reflection 覆盖 2/7，完整系统覆盖 7/7 | [`evidence-pack/ablation_table.md`](./evidence-pack/ablation_table.md) |
-| 防御决策不可或缺 | 去掉 Defense 后 ASR 保持 44% | [`evidence-pack/ablation.json`](./evidence-pack/ablation.json) |
-| 自主加固不伤正常请求 | 精准加固误伤率 0% | [`../product/product-readiness-audit.md`](../product/product-readiness-audit.md) |
-| 工程可回归 | 215 passed, 1 skipped, 2 warnings | [`reproducibility.md`](./reproducibility.md) |
+| 离线 demo 可复现 | `basic-search` 与 `replan-stock-recovery` 均 `GOAL_ACHIEVED=True` | [`final-report.md`](./final-report.md) |
+| 重规划链路有效 | `replan-stock-recovery` 首步 blocked，随后 `REPLANS=1` 并达成目标 | [`comp1-agent-demo-script.md`](./comp1-agent-demo-script.md) |
+| 单任务 CLI 达成目标 | `GOAL_ACHIEVED=True`，轨迹为 `product_search > cart_add_item > create_order` | [`reproducibility.md`](./reproducibility.md) |
+| 批量任务评测可运行 | `total_tasks=3`，`achieved_tasks=3`，`task_achievement_rate=1.000000` | [`final-report.md`](./final-report.md) |
+| 历史安全证据保留 | ASR 44% -> 0%，7 轮收敛 | [`evidence-pack/`](./evidence-pack/) |
 
 ## 目录导览
 
 | 文件 | 用途 |
 |---|---|
-| [`final-report.md`](./final-report.md) | AdvLoop 赛事一正式项目报告 |
-| [`defense-script-8min.md`](./defense-script-8min.md) | AdvLoop 8 分钟中文讲解稿 |
+| [`final-report.md`](./final-report.md) | 赛事一正式项目报告，主线为电商自治任务智能体 |
+| [`comp1-agent-demo-script.md`](./comp1-agent-demo-script.md) | 8 分钟现场演示脚本，覆盖重规划场景 |
 | [`reproducibility.md`](./reproducibility.md) | 环境、安装、离线复现和验证命令 |
-| [`submission-checklist.md`](./submission-checklist.md) | AdvLoop 提交前检查清单 |
-| [`evidence-pack/`](./evidence-pack/) | AdvLoop 固化后的最终证据副本 |
+| [`submission-checklist.md`](./submission-checklist.md) | 提交前检查清单 |
+| [`evidence-pack/`](./evidence-pack/) | 历史安全攻防证据副本，作为可靠性补充 |
+| [`defense-script-8min.md`](./defense-script-8min.md) | 历史安全攻防讲稿，非当前主演示脚本 |
 
 ## 推荐运行顺序
 
-```powershell
-python run.py --closed-loop-demo
-python run.py --attack-campaign --offline
-python run.py --defense-regression --offline
-python run.py --evidence-pack --offline
-python -m pytest -q
+```bash
+python run.py --agent-demo --offline
+python run.py --agent-task "找800元内降噪耳机比价后下单" --offline
+python run.py --task-eval --offline
+python -m pytest -q task_agent/tests trace_dag/tests auto_attack_system/tests auto_defense_system/tests auto_evaluation_system/tests
 ```
 
 ## 边界声明
 
-- 当前目录中的正式报告和证据包对应 AdvLoop 赛事一基线。
-- MCP-Sentinel 赛事二目标形态以根目录 `ROADMAP.md` 为准，尚需按 TP-00 到 TP-09 逐步实现。
-- 所有攻击只作用于本地 mock 靶场。
-- 不接真实淘宝、真实支付、真实企业数据或真实外部攻击目标。
-- 无 API key 时使用 `--offline`，核心基线结果仍可确定性复现。
+- 当前主线使用本地合成电商 store，不连接真实淘宝、真实支付、真实用户数据或真实外部商户。
+- 在线 Qwen 轨迹需要有效 `LLM_API_KEY`、兼容 endpoint 和现场网络；无 API key 时使用 `--offline` 可确定性复现核心链路。
+- `invoke_ecommerce_agent_v2()`、`run.py --agent-demo` 和 `run.py --agent-task` 是赛事展示入口；旧 `invoke_ecommerce_agent()` 仅作为 legacy 兼容入口。
+- 历史安全攻防材料可作为可靠性补充，不应替代电商自治任务智能体主线。

@@ -15,8 +15,11 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
+from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 
 
 def _load_project_llm_config() -> tuple[str, str, str]:
@@ -100,6 +103,96 @@ class SharedLLMClient:
             fallback = self._deterministic_response(system, user, seed)
             return f"{fallback}\n[llm-fallback: {type(exc).__name__}]"
 
+    def complete_json(
+        self,
+        system: str,
+        user: str,
+        *,
+        schema_hint: Any,
+        seed: int = 0,
+        max_tokens: int = 1024,
+    ) -> dict:
+        """返回一次 JSON object 补全，任何失败都会回退到可解析 dict。"""
+        if self.offline:
+            return self._deterministic_json(
+                system, user, schema_hint=schema_hint, seed=seed
+            )
+
+        last_error: Exception | None = None
+        for _ in range(2):
+            try:
+                content = self._live_complete_json(
+                    system,
+                    user,
+                    schema_hint=schema_hint,
+                    seed=seed,
+                    max_tokens=max_tokens,
+                )
+                return self._parse_json_object(content)
+            except Exception as exc:
+                last_error = exc
+
+        fallback = self._deterministic_json(
+            system, user, schema_hint=schema_hint, seed=seed
+        )
+        fallback["fallback_reason"] = (
+            type(last_error).__name__ if last_error is not None else "unknown"
+        )
+        return fallback
+
+    def decide(
+        self,
+        system: str,
+        user: str,
+        *,
+        choices: Sequence[str],
+        seed: int = 0,
+    ) -> dict:
+        """从 choices 中选择一个动作；非法选择回退到第一个候选。"""
+        try:
+            choice_list = list(choices)
+        except Exception as exc:
+            return {
+                "choice": None,
+                "reason": "invalid choices",
+                "fallback_reason": type(exc).__name__,
+                "fallback_choice": True,
+            }
+        if not choice_list:
+            return {
+                "choice": None,
+                "reason": "no choices available",
+                "choices": [],
+                "fallback_choice": True,
+            }
+
+        try:
+            result = self.complete_json(
+                system,
+                user,
+                schema_hint={
+                    "type": "object",
+                    "required": ["choice"],
+                    "choices": choice_list,
+                },
+                seed=seed,
+                max_tokens=256,
+            )
+        except Exception as exc:
+            result = {
+                "fallback_reason": type(exc).__name__,
+                "reason": "complete_json failed",
+            }
+        choice = result.get("choice")
+        if choice not in choice_list:
+            result = dict(result)
+            result["choice"] = choice_list[0]
+            result["invalid_choice"] = choice
+            result["fallback_choice"] = True
+        else:
+            result.setdefault("fallback_choice", False)
+        return result
+
     # -- live API --------------------------------------------------------
     def _live_complete(
         self,
@@ -129,6 +222,39 @@ class SharedLLMClient:
         )
         return response.choices[0].message.content or ""
 
+    def _live_complete_json(
+        self,
+        system: str,
+        user: str,
+        *,
+        schema_hint: Any,
+        seed: int,
+        max_tokens: int,
+    ) -> str:
+        if self._client is None:
+            from openai import OpenAI  # 懒加载，离线环境无需安装
+
+            self._client = OpenAI(
+                base_url=self.config.api_base,
+                api_key=self.config.api_key,
+            )
+        user_with_schema = (
+            f"{user}\n\nReturn only a JSON object matching this schema hint:\n"
+            f"{self._schema_hint_text(schema_hint)}"
+        )
+        response = self._client.chat.completions.create(
+            model=self.config.model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_with_schema},
+            ],
+            temperature=0.0,
+            max_tokens=max_tokens,
+            seed=seed,
+            response_format={"type": "json_object"},
+        )
+        return response.choices[0].message.content or ""
+
     # -- deterministic fallback -----------------------------------------
     @staticmethod
     def _deterministic_response(system: str, user: str, seed: int) -> str:
@@ -137,6 +263,57 @@ class SharedLLMClient:
             f"{seed}\x00{system}\x00{user}".encode("utf-8")
         ).hexdigest()
         return f"[deterministic:{digest[:16]}]"
+
+    @staticmethod
+    def _parse_json_object(content: str) -> dict:
+        parsed = json.loads(content)
+        if isinstance(parsed, dict):
+            return parsed
+        return {"value": parsed}
+
+    @staticmethod
+    def _schema_hint_text(schema_hint: Any) -> str:
+        try:
+            return json.dumps(schema_hint, sort_keys=True, default=str)
+        except Exception:
+            return repr(schema_hint)
+
+    @staticmethod
+    def _deterministic_json(
+        system: str,
+        user: str,
+        schema_hint: Any,
+        *,
+        seed: int,
+    ) -> dict:
+        """基于输入和 schema hint 生成稳定、可解析的 JSON fallback。"""
+        schema_text = SharedLLMClient._schema_hint_text(schema_hint)
+
+        digest = hashlib.sha256(
+            f"{seed}\x00{system}\x00{user}\x00{schema_text}".encode("utf-8")
+        ).hexdigest()
+        result: dict[str, Any] = {
+            "mode": "deterministic-offline",
+            "seed": seed,
+            "digest": digest[:16],
+            "reason": "deterministic JSON fallback",
+        }
+
+        if isinstance(schema_hint, dict):
+            choices = schema_hint.get("choices")
+            if isinstance(choices, Sequence) and not isinstance(
+                choices, str | bytes
+            ):
+                try:
+                    choice_list = list(choices)
+                except Exception as exc:
+                    result["fallback_reason"] = type(exc).__name__
+                else:
+                    if choice_list:
+                        index = int(digest[:8], 16) % len(choice_list)
+                        result["choice"] = choice_list[index]
+
+        return result
 
 
 __all__ = ["LLMConfig", "SharedLLMClient"]

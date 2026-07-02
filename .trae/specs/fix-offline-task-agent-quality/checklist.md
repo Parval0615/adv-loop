@@ -1,0 +1,38 @@
+# Checklist
+
+- [x] 新规格 `fix-offline-task-agent-quality` 的 `spec.md`、`tasks.md`、`checklist.md` 均存在。
+- [x] 已复现并记录旗舰指令当前失败轨迹，作为修复前基线。
+- [x] `_search_query()` 会剥离 `800元内`、`800元以内`、`800块`、`预算`、`比价`、`对比`、`之后`、`后` 等预算/流程/比较噪声。
+- [x] `_search_query()` 对 `找800元内降噪耳机比价后下单` 返回 `降噪耳机`。
+- [x] `store.search_products("降噪耳机")` 命中 `p1001`。
+- [x] 搜索词清洗保留非空兜底，不破坏普通搜索任务。
+- [x] `TaskAgent.run()` 首轮计划仍会执行离线稳定器。
+- [x] `TaskAgent.run()` 重规划分支在 deterministic fallback 下会再次稳定重规划 plan。
+- [x] 离线重规划不会生成只有 `mock_payment` 且没有订单上下文的单步计划。
+- [x] 搜索无匹配重规划会使用放宽后的 query 重试。
+- [x] 缺货重规划会选择有货同类商品、客服工单或明确失败，不会连环 blocked。
+- [x] 旗舰离线 CLI 输出 `GOAL_ACHIEVED=True`。
+- [x] 旗舰离线 CLI trace 至少包含成功的 `product_search`、`cart_add_item`、`create_order`。
+- [x] `DefenseAgent._choose_action()` 不再因为 `llm.offline` 强制使用 `choices[0]`。
+- [x] `AttackAgent._reflect()` 不再因为 `llm.offline` 强制使用 fallback choice。
+- [x] 攻防离线决策同输入同 seed 可复现。
+- [x] 攻防离线决策在不同 category 或上下文下可体现差异化合法 choice，或测试明确证明哈希选择路径被使用。
+- [x] `task_agent/executor.py::_decide_action()` 没有覆盖合法 `llm.decide()` choice。
+- [x] `run.py` 支持 `--task-eval`。
+- [x] `run.py` 支持可选 `--task-file`。
+- [x] `--task-file` 支持 txt 每行一条任务。
+- [x] `--task-file` 支持 JSON 数组任务。
+- [x] `python run.py --task-eval --offline` 会运行默认任务集。
+- [x] `--task-eval` 会调用 `evaluate_task_runs()` 并生成 `TaskEvaluationReport`。
+- [x] `--task-eval` 输出包含 `task_achievement_rate`、`average_steps`、`replan_success_rate`、`invalid_tool_call_rate`。
+- [x] `--task-eval` 落盘 `task_evaluation_report.json`。
+- [x] 公开 `invoke_ecommerce_agent()` 的默认策略已统一到 v2，或报告/脚本已明确 legacy 与 v2 分工。
+- [x] `auto_defense_system/tests/test_ecommerce_agent.py` 通过。
+- [x] `docs/competition/final-report.md` 已回填离线批量评测指标或真实报告路径。
+- [x] 报告仍明确 Qwen 在线轨迹需要 API key 与网络，不虚构在线指标。
+- [x] `python run.py --agent-demo --offline` 通过。
+- [x] `python run.py --agent-task "找800元内降噪耳机比价后下单" --offline` 通过且达成目标。
+- [x] `python run.py --task-eval --offline` 通过。
+- [x] `python -m pytest -q` 或当前仓库约定全量测试命令通过。
+- [x] 所有新增/修改测试均通过。
+- [x] `tasks.md` 中所有任务和子任务已勾选。

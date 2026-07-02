@@ -29,7 +29,38 @@ from auto_defense_system.defense_agent import (
     DEFENSE_PLAYBOOK,
     DefenseAgent,
     HARDENED_RESISTANCE,
+    _defense_candidates,
 )
+
+
+class _InvalidDefenseLLM:
+    offline = False
+    mode = "fake-online"
+
+    def __init__(self) -> None:
+        self.decide_calls: list[list[str]] = []
+
+    def decide(
+        self,
+        system: str,
+        user: str,
+        *,
+        choices: list[str],
+        seed: int = 0,
+    ) -> dict:
+        self.decide_calls.append(list(choices))
+        return {"choice": "not-a-candidate"}
+
+    def complete(
+        self,
+        system: str,
+        user: str,
+        *,
+        seed: int = 0,
+        temperature: float = 0.0,
+        max_tokens: int = 512,
+    ) -> str:
+        return "选择该动作以针对性降低已攻破类别风险。"
 
 
 def test_playbook_covers_all_seven_threats() -> None:
@@ -44,9 +75,46 @@ def test_harden_selects_targeted_action_per_breached_category() -> None:
     assert result.hardened_categories == breached
     for decision in result.decisions:
         assert decision.action.precision == "targeted"
+        assert decision.action.category == decision.category
         assert decision.resistance_after == HARDENED_RESISTANCE
         # 加固后阈值高于任何攻击阶梯 → 不可突破
         assert result.hardened_target.resistance[decision.category] == HARDENED_RESISTANCE
+
+
+def test_invalid_hardening_choice_falls_back_to_playbook() -> None:
+    llm = _InvalidDefenseLLM()
+    result = DefenseAgent(llm=llm).harden(  # type: ignore[arg-type]
+        ["tool_tampering"], base_target=SyntheticTarget()
+    )
+
+    assert llm.decide_calls
+    assert result.decisions[0].action.name == DEFENSE_PLAYBOOK["tool_tampering"].name
+    assert result.decisions[0].action.category == "tool_tampering"
+
+
+def test_offline_hardening_uses_reproducible_decide_choice() -> None:
+    breached = list(THREAT_CATEGORIES)
+    first = DefenseAgent(llm=SharedLLMClient(force_offline=True)).harden(
+        breached, base_target=SyntheticTarget()
+    )
+    second = DefenseAgent(llm=SharedLLMClient(force_offline=True)).harden(
+        breached, base_target=SyntheticTarget()
+    )
+
+    first_actions = [d.action.name for d in first.decisions]
+    assert first_actions == [d.action.name for d in second.decisions]
+    for category, action_name in zip(breached, first_actions, strict=True):
+        legal_names = {
+            action.name for action in _defense_candidates(category, "targeted")
+        }
+        assert action_name in legal_names
+
+    playbook_selected = [
+        action_name == DEFENSE_PLAYBOOK[category].name
+        for category, action_name in zip(breached, first_actions, strict=True)
+    ]
+    assert any(playbook_selected)
+    assert not all(playbook_selected)
 
 
 def test_blanket_strategy_produces_blanket_actions() -> None:

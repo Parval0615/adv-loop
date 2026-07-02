@@ -1,0 +1,46 @@
+# Checklist
+
+- [x] `.trae/specs/build-autonomous-task-agent/spec.md`、`tasks.md`、`checklist.md` 三份规格文件存在且内容一致。
+- [x] `SharedLLMClient.complete()` 的原有签名和文本返回行为保持兼容。
+- [x] `SharedLLMClient.complete_json()` 在线合法 JSON、坏 JSON 重试、在线异常兜底均有测试覆盖。
+- [x] `SharedLLMClient.decide()` 保证 `choice` 必然来自候选集，非法选择回退有测试覆盖。
+- [x] `SharedLLMClient` 离线模式对相同输入和 seed 返回确定性结果。
+- [x] `task_agent/models.py` 定义的 dataclass 字段与 `spec.md` 契约一致。
+- [x] `task_agent/prompts.py` 覆盖解析、规划、执行思考、参数生成、重规划、总结和目标判定提示词。
+- [x] `task_agent/tool_registry.py` 覆盖当前 `tools.py` 的公开电商工具，并在测试中核对 catalog 名称。
+- [x] `catalog_for_role("buyer")` 不暴露 `merchant_update_price` 和 `merchant_update_stock`。
+- [x] `tool_registry.invoke()` 调用真实 `auto_defense_system.ecommerce_agent.tools` 函数，不复制业务状态机逻辑。
+- [x] 未知工具或非法参数返回 blocked `ToolExecution`，不会抛出未捕获异常。
+- [x] `parse_task()` 可解析多目标中文购物指令，输出包含搜索/比价、下单、退款等子目标。
+- [x] `make_plan()` 生成的每个 `PlanStep.candidate_tool` 都来自角色可见工具目录。
+- [x] `Executor.run_step()` 串联 thought、tool decision、argument JSON、真实工具调用和 Observation。
+- [x] 执行 `cart_add_item` 或等价步骤后，`EcommerceStore` 中的购物车状态真实变化。
+- [x] `Observation` 正确保留 `blocked`、`answer`、`value` 摘要和 `risk_level`。
+- [x] `should_replan()` 对 blocked、缺货/无匹配、超预算、下单失败、支付失败返回可解释诊断。
+- [x] `replan()` 生成的新 `Plan.revision` 单调递增，并复用角色合法工具目录校验。
+- [x] `TaskAgent.run()` 返回包含 `task_spec`、`plans`、`trace`、`final_answer`、`goal_achieved`、`replan_count`、`llm_mode` 的 `TaskRunResult`。
+- [x] `TaskAgent.run()` 遵守 `max_steps` 和 `max_replans`，不会无限循环。
+- [x] 缺货或预算不足 demo 至少一个场景触发重规划，并最终成功或给出明确失败原因。
+- [x] `task_agent/trace_adapter.py` 生成的 event schema 可被 `trace_dag.write_trace_artifacts()` 接受。
+- [x] `export_plan_trace()` 落盘 `trace_graph.md`、`trace_timeline.jsonl`、`trace_integrity.json`。
+- [x] `python run.py --agent-task "找800元内降噪耳机比价后下单" --offline` 可运行并打印稳定摘要。
+- [x] `python run.py --agent-demo --offline` 可运行，且至少一个场景显示重规划。
+- [x] `pyproject.toml` 收集 `task_agent/tests`，新增测试可被 `pytest` 自动发现。
+- [x] `invoke_ecommerce_agent_v2()` 存在，正常路径使用 `TaskAgent.run()`，旧 `_route_message()` 保留为 legacy/兜底。
+- [x] 新电商入口返回结构兼容 `EcommerceAgentResult` 的现有字段。
+- [x] 目标漂移拦截信号可作为 blocked observation 或兼容兜底参与任务处理。
+- [x] `defense_agent.py::harden()` 的主选择由 `llm.decide()` 完成，`DEFENSE_PLAYBOOK` 只作为候选池或离线兜底。
+- [x] `attack_agent.py::_reflect()` 不再机械 `ladder_index + 1`，升级方向由 LLM 决策或离线兜底产生。
+- [x] `attack_agent.py::_plan()` 可通过 `complete_json()` 基于历史生成下一条 payload。
+- [x] `SyntheticTarget.attempt()` 支持 `online_judge` 分支，阈值逻辑仅作为离线兜底。
+- [x] `auto_defense_system/src/auto_defense_system/agent/react.py` 已标记 legacy，赛事主链路指向 `task_agent/executor.py`。
+- [x] 新增任务评测输出任务达成率、平均步数、重规划触发率、重规划成功率、无效工具调用率。
+- [x] 任务评测同时使用 `TaskRunResult`、真实 store 状态和 LLM-as-judge，不只依赖文本答案。
+- [x] Qwen 在线配置示例已在合适位置补充，或实现阶段确认无需新增 `.env.example`。
+- [x] `docs/competition/final-report.md` 主线改为电商自治任务智能体，安全作为可靠性保障呈现。
+- [x] `docs/competition/comp1-agent-demo-script.md` 包含 8 分钟现场演示流程和故障重规划场景。
+- [x] TaskAgent 专项测试通过。
+- [x] `trace_dag/tests` 回归通过。
+- [x] `auto_attack_system/tests`、`auto_defense_system/tests`、`auto_evaluation_system/tests` 中与本改造相关的测试通过。
+- [x] 全量 pytest 收集阶段不再因 `langchain_openai` 缺失而失败，离线/CI 环境可完成本规格相关验证。
+- [x] 全部 checklist 通过后，`tasks.md` 中 Task 1-16 均已勾选。

@@ -12,8 +12,9 @@
 不影响良性请求；对照的 **blanket（一刀切）** 加固会误伤良性请求——用于消融对比，
 也用来证明"加固不破坏正常购物体验"。
 
-LLM 用法：加固选型的 rationale 由共享 LLM 客户端生成；动作选择与 resistance
-提升是确定性的，因此加固有效率 / 误伤率离线完全可复现。
+LLM 用法：旧 playbook 只作为候选池；动作最终通过共享 LLM 客户端
+``decide()`` 选择。非法输出或异常时回退旧 playbook 首选项，因此加固有效率 /
+误伤率仍可复现。
 """
 
 from __future__ import annotations
@@ -119,6 +120,35 @@ BENIGN_REQUESTS: dict[str, list[str]] = {
 }
 
 
+def _defense_candidates(
+    category: str, strategy: Literal["targeted", "blanket"]
+) -> list[HardeningAction]:
+    """构造 LLM 可选动作池；首项保持旧 playbook 行为作为 fallback。"""
+    base_action = DEFENSE_PLAYBOOK[category]
+    if strategy == "blanket":
+        return [
+            HardeningAction(
+                name=f"blanket_block_{category}",
+                action_type=base_action.action_type,
+                category=category,
+                defense_module=base_action.defense_module,
+                rationale_hint="一刀切拦截该类别全部请求（含良性）。",
+                precision="blanket",
+            )
+        ]
+    return [
+        base_action,
+        HardeningAction(
+            name=f"{base_action.name}_policy_guard",
+            action_type=base_action.action_type,
+            category=category,
+            defense_module=base_action.defense_module,
+            rationale_hint=f"{base_action.rationale_hint} 同时记录策略审计信号。",
+            precision="targeted",
+        ),
+    ]
+
+
 @dataclass
 class BenignEvaluation:
     """单条良性请求在加固后的回归结果（用于误伤率）。"""
@@ -184,7 +214,33 @@ class DefenseAgent:
             f"复用模块：{action.defense_module}\n"
             f"要点：{action.rationale_hint}"
         )
-        return self.llm.complete(system, user, seed=hash(category) % 1000).strip()
+        return self.llm.complete(
+            system, user, seed=sum(ord(ch) for ch in category) % 1000
+        ).strip()
+
+    def _choose_action(self, category: str) -> HardeningAction:
+        candidates = _defense_candidates(category, self.strategy)
+        choices = [action.name for action in candidates]
+        action_by_name = {action.name: action for action in candidates}
+        system = (
+            "你是蓝队加固动作选择器。根据被攻破类别，从候选动作中选择一个。"
+            "只选择给定候选，不要发明动作。"
+        )
+        user = (
+            f"被攻破类别：{THREAT_CATEGORIES[category]}({category})\n"
+            f"加固策略：{self.strategy}\n"
+            f"候选动作：{[action.to_dict() for action in candidates]}"
+        )
+        try:
+            decision = self.llm.decide(
+                system, user, choices=choices, seed=sum(ord(ch) for ch in category)
+            )
+        except Exception as exc:
+            decision = {"choice": choices[0], "fallback_reason": type(exc).__name__}
+        choice = decision.get("choice")
+        if choice not in action_by_name:
+            choice = choices[0]
+        return action_by_name[choice]
 
     def _evaluate_benign(
         self, decisions: list[HardeningDecision]
@@ -228,20 +284,7 @@ class DefenseAgent:
 
         decisions: list[HardeningDecision] = []
         for category in breached_categories:
-            base_action = DEFENSE_PLAYBOOK[category]
-            # blanket 策略：把动作降级为一刀切（高误伤），用于消融对比
-            action = (
-                base_action
-                if self.strategy == "targeted"
-                else HardeningAction(
-                    name=f"blanket_block_{category}",
-                    action_type=base_action.action_type,
-                    category=category,
-                    defense_module=base_action.defense_module,
-                    rationale_hint="一刀切拦截该类别全部请求（含良性）。",
-                    precision="blanket",
-                )
-            )
+            action = self._choose_action(category)
             resistance_before = hardened.resistance.get(category, 0)
             hardened.resistance[category] = HARDENED_RESISTANCE
             decisions.append(

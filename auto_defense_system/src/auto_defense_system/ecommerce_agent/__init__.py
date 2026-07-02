@@ -1,6 +1,7 @@
 from auto_defense_system.ecommerce_agent.agent import (
     EcommerceAgentResult,
     invoke_ecommerce_agent,
+    invoke_ecommerce_agent_v2,
 )
 from auto_defense_system.ecommerce_agent.fixtures import create_demo_store
 from auto_defense_system.ecommerce_agent.store import EcommerceStore
@@ -10,4 +11,5 @@ __all__ = [
     "EcommerceStore",
     "create_demo_store",
     "invoke_ecommerce_agent",
+    "invoke_ecommerce_agent_v2",
 ]

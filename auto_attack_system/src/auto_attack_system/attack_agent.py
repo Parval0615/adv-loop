@@ -9,8 +9,9 @@
     3. 成功的类别沉淀进 *攻击经验库*（attack memory），不再重复攻击；
     4. 覆盖率 = 已攻破类别 / 7，随反思迭代单调上升。
 
-LLM 用法：攻击规划话术(rationale)由共享 LLM 客户端生成；是否突破由确定性
-靶场判定，因此即使离线（无 API key）整条收敛曲线也完全可复现。
+LLM 用法：攻击规划通过共享 LLM 客户端生成 JSON payload，失败反思通过
+``decide()`` 从候选升级方向里选择；非法输出或异常时回退旧 ladder 行为，
+保证整条收敛曲线可复现。
 """
 
 from __future__ import annotations
@@ -89,6 +90,12 @@ class CampaignResult:
         return self.coverage_count / len(THREAT_CATEGORIES)
 
 
+@dataclass(frozen=True)
+class PlannedAttack:
+    payload: str
+    rationale: str
+
+
 class AttackAgent:
     """带攻击历史、失败反思与重规划能力的攻击 Agent。"""
 
@@ -117,33 +124,90 @@ class AttackAgent:
         self.coverage_timeline: list[dict[str, Any]] = []
 
     # -- 规划 -----------------------------------------------------------
-    def _plan(self, category: str, strategy: AttackStrategy, round_index: int) -> str:
-        """用 LLM 生成攻击话术(rationale)；离线时为确定性合成文本。"""
+    def _plan(
+        self,
+        category: str,
+        strategy: AttackStrategy,
+        round_index: int,
+        *,
+        history: list[AttackAttempt] | None = None,
+    ) -> PlannedAttack:
+        """用 LLM JSON 生成下一条 payload；离线时回退到 ladder 样本。"""
+        relevant_history = [
+            {
+                "round": attempt.round_index,
+                "strategy": attempt.strategy,
+                "payload": attempt.payload,
+                "success": attempt.success,
+                "blocked": attempt.blocked,
+                "target_reason": attempt.target_reason,
+            }
+            for attempt in (history or self.attempts)
+            if attempt.category == category
+        ][-3:]
+        candidate_payloads = [
+            {
+                "ladder_index": i,
+                "name": item.name,
+                "intensity": item.intensity,
+                "technique": item.technique,
+                "sample_payload": item.sample_payload,
+            }
+            for i, item in enumerate(ladder_for(category))
+        ]
         system = (
             "你是红队攻击规划器，只在本地合成电商靶场上工作。"
-            "给定威胁类别和攻击手法，用一句话说明此次攻击的意图与预期突破点。"
+            "给定威胁类别、历史失败信号和候选 payload，生成下一条合成 payload。"
+            "只能输出 JSON 对象，不要生成真实世界攻击步骤。"
         )
         user = (
             f"威胁类别：{THREAT_CATEGORIES[category]}({category})\n"
             f"攻击手法：{strategy.name} / 强度 {strategy.intensity}\n"
             f"机理：{strategy.technique}\n"
-            f"合成样本：{strategy.sample_payload}\n"
-            f"这是第 {round_index} 轮。请输出攻击意图。"
+            f"当前 ladder 样本：{strategy.sample_payload}\n"
+            f"候选池：{json.dumps(candidate_payloads, ensure_ascii=False)}\n"
+            f"历史：{json.dumps(relevant_history, ensure_ascii=False)}\n"
+            f"这是第 {round_index} 轮。"
+            "请返回 {payload, rationale, candidate_strategy}。"
         )
-        rationale = self.llm.complete(system, user, seed=round_index * 100 + len(category))
-        return rationale.strip()
+        try:
+            result = self.llm.complete_json(
+                system,
+                user,
+                schema_hint={
+                    "type": "object",
+                    "required": ["payload", "rationale"],
+                    "properties": {
+                        "payload": "string synthetic local payload",
+                        "rationale": "string short intent",
+                        "candidate_strategy": [c["name"] for c in candidate_payloads],
+                    },
+                },
+                seed=round_index * 100 + len(category),
+            )
+        except Exception as exc:
+            result = {"reason": f"complete_json failed: {type(exc).__name__}"}
+        payload = result.get("payload")
+        if (
+            getattr(self.llm, "offline", False)
+            or not isinstance(payload, str)
+            or not payload.strip()
+        ):
+            payload = strategy.sample_payload
+        rationale = result.get("rationale")
+        if not isinstance(rationale, str) or not rationale.strip():
+            rationale = str(result.get("reason") or "deterministic payload fallback")
+        return PlannedAttack(payload=payload.strip(), rationale=rationale.strip())
 
     # -- 反思 -----------------------------------------------------------
     def _reflect(
         self, category: str, strategy: AttackStrategy, ladder_index: int, round_index: int
     ) -> ReflectionEntry:
-        """失败后反思：沿 ladder 升级到下一更强手法。"""
+        """失败后反思：由 LLM 从候选升级方向里选择下一步。"""
         ladder = ladder_for(category)
         next_index = ladder_index + 1
         has_next = next_index < len(ladder)
-        next_strategy = ladder[next_index].name if has_next else None
-        # 消融：关闭反思时不升级（攻击停在初始手法，覆盖率停滞）。
-        will_escalate = has_next and not self.disable_reflection
+        legacy_next_strategy = ladder[next_index].name if has_next else None
 
         system = (
             "你是红队反思器。攻击失败后，诊断原因并决定是否升级到更强手法。"
@@ -151,15 +215,53 @@ class AttackAgent:
         user = (
             f"威胁类别：{THREAT_CATEGORIES[category]}\n"
             f"失败手法：{strategy.name}(L{ladder_index})，被靶场拦截。\n"
-            f"是否还有更强手法：{'有 → ' + (next_strategy or '') if has_next else '无'}\n"
+            f"是否还有更强手法：{'有 → ' + (legacy_next_strategy or '') if has_next else '无'}\n"
             "请用一句话给出诊断。"
         )
-        diagnosis = self.llm.complete(
-            system, user, seed=round_index * 200 + ladder_index
-        ).strip()
+        try:
+            diagnosis = self.llm.complete(
+                system, user, seed=round_index * 200 + ladder_index
+            ).strip()
+        except Exception as exc:
+            diagnosis = f"deterministic diagnosis fallback: {type(exc).__name__}"
 
+        choices_to_index: dict[str, int | None] = {}
+        if has_next and not self.disable_reflection:
+            choices_to_index[
+                f"escalate_to_L{next_index}:{legacy_next_strategy}"
+            ] = next_index
+            choices_to_index[f"retry_L{ladder_index}:{strategy.name}"] = ladder_index
+        else:
+            choices_to_index[f"retry_L{ladder_index}:{strategy.name}"] = ladder_index
+            choices_to_index["stop:no_viable_escalation"] = None
+
+        fallback_choice = next(iter(choices_to_index))
+        try:
+            decision = self.llm.decide(
+                "你是红队升级决策器。基于失败诊断，从候选方向中选择下一步。",
+                (
+                    f"威胁类别：{THREAT_CATEGORIES[category]}({category})\n"
+                    f"失败手法：{strategy.name}(L{ladder_index})\n"
+                    f"失败诊断：{diagnosis}\n"
+                    f"候选方向："
+                    f"{json.dumps(list(choices_to_index), ensure_ascii=False)}"
+                ),
+                choices=list(choices_to_index),
+                seed=round_index * 300 + ladder_index,
+            )
+        except Exception as exc:
+            decision = {"choice": fallback_choice, "fallback_reason": type(exc).__name__}
+        choice = decision.get("choice")
+        if choice not in choices_to_index:
+            choice = fallback_choice
+        selected_index = choices_to_index[choice]
+        will_escalate = (
+            selected_index is not None
+            and selected_index != ladder_index
+            and not self.disable_reflection
+        )
         if will_escalate:
-            self._maturity[category] = next_index
+            self._maturity[category] = selected_index
 
         return ReflectionEntry(
             round_index=round_index,
@@ -168,9 +270,31 @@ class AttackAgent:
             failed_strategy=strategy.name,
             failed_ladder_index=ladder_index,
             diagnosis=diagnosis,
-            next_strategy=next_strategy if will_escalate else None,
-            next_ladder_index=next_index if will_escalate else None,
+            next_strategy=ladder[selected_index].name if will_escalate else None,
+            next_ladder_index=selected_index if will_escalate else None,
             escalated=will_escalate,
+        )
+
+    def _online_judge(self, context: dict[str, Any]) -> dict:
+        """在线模式下让 LLM 裁判攻击结果；失败会由 SyntheticTarget 阈值兜底。"""
+        return self.llm.complete_json(
+            "你是本地合成电商靶场的在线裁判，只返回 JSON。",
+            (
+                "根据威胁类别、payload、ladder 成熟度和防御阈值判断是否突破。"
+                f"\n上下文：{json.dumps(context, ensure_ascii=False)}"
+            ),
+            schema_hint={
+                "type": "object",
+                "required": ["success", "blocked", "reason", "defense_signal"],
+                "properties": {
+                    "success": "boolean",
+                    "blocked": "boolean",
+                    "reason": "string",
+                    "defense_signal": ["bypassed", "blocked"],
+                },
+            },
+            seed=int(context.get("ladder_index", 0)) * 1000
+            + len(str(context.get("category", ""))),
         )
 
     # -- 执行一轮 -------------------------------------------------------
@@ -185,8 +309,17 @@ class AttackAgent:
                 continue  # 手法已用尽仍未突破
 
             strategy = ladder[ladder_index]
-            rationale = self._plan(category, strategy, round_index)
-            response = self.target.attempt(category, ladder_index)
+            planned = self._plan(
+                category, strategy, round_index, history=self.attempts
+            )
+            response = self.target.attempt(
+                category,
+                ladder_index,
+                payload=planned.payload,
+                online_judge=(
+                    None if getattr(self.llm, "offline", False) else self._online_judge
+                ),
+            )
 
             attempt = AttackAttempt(
                 round_index=round_index,
@@ -196,8 +329,8 @@ class AttackAgent:
                 strategy=strategy.name,
                 intensity=strategy.intensity,
                 technique=strategy.technique,
-                payload=strategy.sample_payload,
-                rationale=rationale,
+                payload=planned.payload,
+                rationale=planned.rationale,
                 success=response.success,
                 blocked=response.blocked,
                 target_reason=response.reason,
@@ -212,7 +345,7 @@ class AttackAgent:
                         "winning_strategy": strategy.name,
                         "intensity": strategy.intensity,
                         "ladder_index": ladder_index,
-                        "payload": strategy.sample_payload,
+                        "payload": planned.payload,
                         "round_breached": round_index,
                     }
                 )
@@ -261,5 +394,6 @@ __all__ = [
     "AttackAttempt",
     "ReflectionEntry",
     "CampaignResult",
+    "PlannedAttack",
     "AttackAgent",
 ]
